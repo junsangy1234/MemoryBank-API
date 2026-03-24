@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: '1234' # Docker pw
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update # db test
+    show-sql: true # sql sequence show
+    properties:
+      hibernate:
+        format_sql: true
+        default_batch_fetch_size: 1000
+    open-in-view: false
+
+# log
+logging:
+  level:
+    org.hibernate.SQL: debug
