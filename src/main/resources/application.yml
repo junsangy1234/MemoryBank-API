@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: '1234'
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    open-in-view: false
+  ai:
+    openai:
+      embedding:
+        options:
+          model: "text-embedding-3-small"
+
+spring.ai.openai.api-key: ${OPENAI_API_KEY}rm -rf .git
+
+logging:
+  level:
+    org.hibernate.SQL: debug
