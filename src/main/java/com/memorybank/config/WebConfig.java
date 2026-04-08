@@ -9,10 +9,10 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                // 💡 특정 사이트만 허용하지 말고, 일단 테스트를 위해 전부 열어둡니다!
-                .allowedOriginPatterns("*")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedOriginPatterns("*") // 모든 주소 허용
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS") // OPTIONS 필수!
                 .allowedHeaders("*")
-                .allowCredentials(true);
+                .exposedHeaders("Authorization", "X-API-KEY") // 브라우저가 읽을 수 있게 헤더 노출
+                .allowCredentials(false); // 💡 true로 하면 보안상 "*"를 못 씁니다. false가 안전합니다!
     }
 }
