@@ -37,25 +37,37 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         });
 
         try {
+            // 1. 🌟 스토리지에서 API 키와 현재 워크스페이스 ID를 가져옵니다.
+            const authData = await new Promise((resolve) => {
+                chrome.storage.local.get(['memoryBankApiKey', 'currentWorkspaceId'], (result) => {
+                    resolve(result);
+                });
+            });
+
+            const apiKey = authData.memoryBankApiKey;
+            const workspaceId = authData.currentWorkspaceId;
+
+            // 2. 로그인이 안 되어 있다면 중단
+            if (!apiKey) {
+                chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    func: () => alert("🚨 로그인이 필요합니다. 확장 프로그램 팝업에서 로그인해 주세요.")
+                });
+                return;
+            }
+
+            // 3. 🚀 가져온 키를 헤더에 꽂아서 통신합니다.
             const response = await fetch("https://aimemorybank.cloud/api/memories/join", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "X-API-KEY": "d2892a64-b06c-43af-8e56-cf3f90ddebc5"
+                    "X-API-KEY": apiKey // 👈 이제 하드코딩이 아닌 실제 키가 들어갑니다!
                 },
                 body: JSON.stringify({
-                    workspaceId: 1,
+                    workspaceId: workspaceId || 1, // 👈 워크스페이스도 동적으로! (없으면 기본값 1)
                     content: selectedText,
                     type: "SNIPPET"
                 })
-            });
-
-            if (!response.ok) throw new Error("서버 응답 에러");
-
-            // 성공 시 현재 탭 화면 중앙에 팝업
-            chrome.scripting.executeScript({
-                target: { tabId: tab.id },
-                func: () => alert("✅ [부분 저장]\n선택한 내용이 Memory Bank에 성공적으로 기록되었습니다!")
             });
 
         } catch (error) {

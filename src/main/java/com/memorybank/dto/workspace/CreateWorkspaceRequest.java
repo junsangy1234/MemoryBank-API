@@ -3,13 +3,10 @@ package com.memorybank.dto.workspace;
 import lombok.*;
 
 @Getter
+@Setter
 @ToString
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@NoArgsConstructor
+@AllArgsConstructor
 public class CreateWorkspaceRequest {
     private String name;
-
-    @Builder
-    public CreateWorkspaceRequest(String name) {
-        this.name = name;
-    }
 }
