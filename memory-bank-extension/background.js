@@ -61,14 +61,25 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "X-API-KEY": apiKey // 👈 이제 하드코딩이 아닌 실제 키가 들어갑니다!
+                    "X-API-KEY": apiKey
                 },
                 body: JSON.stringify({
-                    workspaceId: workspaceId || 1, // 👈 워크스페이스도 동적으로! (없으면 기본값 1)
+                    workspaceId: workspaceId || 1,
                     content: selectedText,
                     type: "SNIPPET"
                 })
             });
+
+            // 🌟 아래 성공/실패 처리 로직을 추가해야 합니다!
+            if (response.ok) {
+                chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    func: () => alert("✅ Memory Bank에 성공적으로 저장되었습니다!")
+                });
+            } else {
+                const errorMsg = await response.text();
+                throw new Error(errorMsg);
+            }
 
         } catch (error) {
             console.error("🚨 부분 저장 실패:", error);
