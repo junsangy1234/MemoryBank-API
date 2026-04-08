@@ -42,7 +42,11 @@ document.getElementById('login-btn').addEventListener('click', () => {
         try {
             const response = await fetch("https://aimemorybank.cloud/api/auth/google", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                mod: "cors",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
                 body: JSON.stringify({ accessToken: token })
             });
 
