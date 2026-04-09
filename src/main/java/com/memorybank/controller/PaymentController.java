@@ -14,8 +14,8 @@ import java.util.Map;
 @RequestMapping("/api/billing")
 @RequiredArgsConstructor
 public class PaymentController {
-    private MemberService memberService;
-    private PaymentService paymentService;
+    private final MemberService memberService;
+    private final PaymentService paymentService;
 
     // 결제 성공 후 등급 업그레이드 API
     @PostMapping("/upgrade")

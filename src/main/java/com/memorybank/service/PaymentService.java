@@ -34,13 +34,14 @@ public class PaymentService {
         try {
             // 2. JSON 파싱
             JsonNode rootNode = objectMapper.readTree(rawBody);
+
             String eventName = rootNode.path("meta").path("event_name").asText();
 
             // 3. '결제 완료(order_created)' 이벤트일 때만 로직 실행
             if ("order_created".equals(eventName)) {
 
                 // 프론트엔드에서 결제창 띄울 때 심어둔 커스텀 데이터(유저 ID) 꺼내기
-                JsonNode customData = rootNode.path("data").path("custom_data");
+                JsonNode customData = rootNode.path("meta").path("custom_data");
                 Long memberId = customData.path("member_id").asLong();
 
                 // 4. 등급 업그레이드 (더티 체킹 발동!)
