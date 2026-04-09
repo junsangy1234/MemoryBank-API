@@ -42,7 +42,7 @@ public class PaymentService {
 
                 // 프론트엔드에서 결제창 띄울 때 심어둔 커스텀 데이터(유저 ID) 꺼내기
                 JsonNode customData = rootNode.path("meta").path("custom_data");
-                Long memberId = customData.path("member_id").asLong();
+                long memberId = customData.path("member_id").asLong();
 
                 // 4. 등급 업그레이드 (더티 체킹 발동!)
                 Member member = memberRepository.findById(memberId)
