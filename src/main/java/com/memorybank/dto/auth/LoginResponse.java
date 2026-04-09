@@ -8,6 +8,6 @@ public record LoginResponse(
         String apiKey,
         String email,
         String name,
-        List<WorkspaceDto> workspaces,
-        int dailyCredits
+        int dailyCredits,
+        List<WorkspaceDto> workspaces
 ) {}

@@ -46,7 +46,7 @@ public class Member {
         this.apiKey = apiKey;
         this.name = name;
     }
-
+    //===========
     //비지니스 로직
 
     //날짜 바뀌면 크레딧 초기화

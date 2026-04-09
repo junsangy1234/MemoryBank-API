@@ -3,12 +3,14 @@ package com.memorybank.service.memory;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.memorybank.domain.CreditPolicy;
 import com.memorybank.domain.Member;
 import com.memorybank.domain.Memory;
 import com.memorybank.domain.Workspace;
 import com.memorybank.dto.memory.ExtractionMemoryResult;
 import com.memorybank.dto.memory.SyncMemoryDto;
 import com.memorybank.dto.memory.SyncResponse;
+import com.memorybank.repository.MemberRepository;
 import com.memorybank.repository.MemoryRepository;
 import com.memorybank.service.WorkspaceService;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +37,7 @@ public class MemoryService {
 
     private final MemoryRepository memoryRepository;
     private final WorkspaceService workspaceService;
+    private final MemberRepository memberRepository;
 
     // Spring Ai 추상화 모델
     private final EmbeddingModel embeddingModel;
@@ -60,7 +63,8 @@ public class MemoryService {
         }
 
         //저장시 크레딧 사용(3)
-        member.useCredit(3);
+        member.useCredit(CreditPolicy.SAVE_COST);
+        memberRepository.save(member);
 
         List<Long> saveIds = new ArrayList<>();
 
@@ -205,7 +209,8 @@ public class MemoryService {
 
 
         //검색 크레딧 사용(1)
-        member.useCredit(30);
+        member.useCredit(CreditPolicy.SEARCH_COST);
+        memberRepository.save(member);
 
         float[] questionVector = embeddingModel.embed(question);
         memoryRepository.debugDistances(workspaceId, questionVector);
@@ -216,12 +221,17 @@ public class MemoryService {
                 .toList();
     }
 
+    @Transactional
     public SyncResponse getMemoriesForSync(Member member, Long workspaceId, Long lastId, int limit) {
         Workspace workspace = workspaceService.findByIdWithMember(workspaceId);
 
         if (!workspace.getMember().getId().equals(member.getId())) {
             throw new IllegalStateException("해당 워크스페이스에 대한 접근 권한이 없습니다.");
         }
+
+        //불러오기시 크레딧 사용(2)
+        member.useCredit(CreditPolicy.LOAD_COST);
+        memberRepository.save(member);
 
         // 💡 Pageable 없이 limit 숫자를 바로 넘깁니다! (훨씬 직관적)
         List<Memory> memories = memoryRepository.findMemoriesForSync(workspaceId, lastId, limit);

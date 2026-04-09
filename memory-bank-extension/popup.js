@@ -7,8 +7,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (data.memoryBankApiKey && data.workspaces) {
-            // 🌟 credits 인자 전달
-            showLoggedInUI(data.userName, data.workspaces, data.currentWorkspaceId, data.isSavingInProgress, data.dailyCredits || 0);
+            // 🌟 백엔드가 준 값 100% 신뢰 (없으면 0)
+            const currentCredits = data.dailyCredits !== undefined ? data.dailyCredits : 0;
+            showLoggedInUI(data.userName, data.workspaces, data.currentWorkspaceId, data.isSavingInProgress, currentCredits);
         }
     });
 });
@@ -55,6 +56,7 @@ document.getElementById('login-btn').addEventListener('click', () => {
 
             if (data.apiKey && data.workspaces) {
                 const defaultWorkspaceId = data.workspaces[0].id;
+                const fetchedCredits = data.dailyCredits !== undefined ? data.dailyCredits : 0;
 
                 chrome.storage.local.set({
                     'memoryBankApiKey': data.apiKey,
@@ -62,9 +64,9 @@ document.getElementById('login-btn').addEventListener('click', () => {
                     'userEmail': data.email,
                     'currentWorkspaceId': defaultWorkspaceId,
                     'workspaces': data.workspaces,
-                    'dailyCredits': data.dailyCredits || 30 // 🌟 백엔드에서 받아온 번개 저장
+                    'dailyCredits': fetchedCredits // 🌟 백엔드 값 그대로 저장! (강제 30 세팅 삭제)
                 }, function() {
-                    showLoggedInUI(data.name, data.workspaces, defaultWorkspaceId, false, data.dailyCredits || 30);
+                    showLoggedInUI(data.name, data.workspaces, defaultWorkspaceId, false, fetchedCredits);
                 });
             }
         } catch (error) {
@@ -77,7 +79,7 @@ document.getElementById('login-btn').addEventListener('click', () => {
     });
 });
 
-// 🌟 로그인 완료 후 화면 그려주는 함수 (credits 파라미터 추가)
+// 🌟 로그인 완료 후 화면 그려주는 함수
 function showLoggedInUI(name, workspaces, currentWsId, isSaving, credits) {
     document.getElementById('login-btn').style.display = 'none';
     document.getElementById('desc').style.display = 'none';

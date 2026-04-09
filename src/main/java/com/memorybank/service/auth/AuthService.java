@@ -59,6 +59,9 @@ public class AuthService {
             member = memberService.findById(memberId);
         }
 
+        // 날짜가 지났다면 로그인 시점에 크레딧을 가득 채워줍니다!
+        member.resetCreditsIfNeeded();
+
         List<Workspace> workspaces = workspaceService.findByMember(member);
         if (workspaces.isEmpty()) {
             Long defaultId = workspaceService.createWorkspace(member, "default_workspace");
@@ -69,6 +72,6 @@ public class AuthService {
                 .map(w -> new WorkspaceDto(w.getId(), w.getName()))
                 .toList();
 
-        return new LoginResponse(member.getApiKey(), member.getEmail(), member.getName(), workspaceDtos, member.getDailyCredits());
+        return new LoginResponse(member.getApiKey(), member.getEmail(), member.getName(), member.getDailyCredits(), workspaceDtos );
     }
 }
