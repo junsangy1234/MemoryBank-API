@@ -29,7 +29,7 @@ public class MemoryController {
             @RequestBody SaveMemoryRequest request){
 
         Member member = memberService.findByApiKey(apiKey);
-        List<Long> memoryId = memoryService.saveMemory(member, request.getWorkspaceId(), request.getContent(), request.getType());
+        List<Long> memoryId = memoryService.saveMemory(member.getId(), request.getWorkspaceId(), request.getContent(), request.getType());
 
         return new SaveMemoryResponse(memoryId, "기억이 성공적으로 저장 되었습니다.");
     }
@@ -53,7 +53,7 @@ public class MemoryController {
             @RequestParam(value = "threshold", defaultValue = "0.8") float threshold) {
         Member member = memberService.findByApiKey(apiKey);
 
-        List<String> similarMemories = memoryService.searchSimilarMemories(member, workspaceId, question, topK,threshold);
+        List<String> similarMemories = memoryService.searchSimilarMemories(member.getId(), workspaceId, question, topK,threshold);
 
         return new Result(similarMemories.size(), similarMemories);
     }
@@ -67,7 +67,7 @@ public class MemoryController {
     ){
         Member member = memberService.findByApiKey(apiKey);
 
-        SyncResponse response = memoryService.getMemoriesForSync(member, workspaceId, lastId, limit);
+        SyncResponse response = memoryService.getMemoriesForSync(member.getId(), workspaceId, lastId, limit);
         return ResponseEntity.ok(response);
     }
 }
