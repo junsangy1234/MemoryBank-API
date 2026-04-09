@@ -2,6 +2,7 @@ package com.memorybank.controller;
 
 import com.memorybank.domain.Member;
 import com.memorybank.domain.Role;
+import com.memorybank.service.PaymentService;
 import com.memorybank.service.member.MemberService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class PaymentController {
     private MemberService memberService;
+    private PaymentService paymentService;
 
     // 결제 성공 후 등급 업그레이드 API
     @PostMapping("/upgrade")
@@ -42,5 +44,14 @@ public class PaymentController {
         member.addRewardCredits(10);
 
         return ResponseEntity.ok(member.getDailyCredits());
+    }
+
+    @PostMapping("/webhook")
+    public ResponseEntity<String> handleLemonSqueezyWebhook(
+            @RequestHeader("X-Signature") String signature, // 레몬스퀴지가 보낸 암호화 서명
+            @RequestBody String rawBody // 서명 검증을 위해 가공되지 않은 날것의 JSON을 받음
+    ) {
+        paymentService.processWebhook(signature, rawBody);
+        return ResponseEntity.ok("Webhook received successfully");
     }
 }

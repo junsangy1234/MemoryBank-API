@@ -16,7 +16,12 @@ spring:
         options:
           model: "text-embedding-3-small"
 
+lemon-squeezy:
+  webhook-secret: ${LEMON_SQUEEZY_SECRET}
+
 spring.ai.openai.api-key: ${OPENAI_API_KEY}rm -rf .git
+
+
 
 logging:
   level:
