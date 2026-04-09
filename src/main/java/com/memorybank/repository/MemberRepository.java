@@ -15,7 +15,11 @@ public class MemberRepository {
     private final EntityManager em;
 
     public void save(Member member){
-        em.persist(member);
+        if(member.getId() == null){
+            em.persist(member);
+        }else{
+            em.merge(member);
+        }
     }
 
     public Optional<Member> findOne(Long id){
@@ -24,6 +28,13 @@ public class MemberRepository {
 
     public List<Member> findAll(){
         return em.createQuery("SELECT m FROM Member m", Member.class).getResultList();
+    }
+
+    public Optional<Member> findById(long memberId){
+        return em.createQuery("SELECT m FROM Member m WHERE m.id = :memberId",Member.class)
+                .setParameter("memberId", memberId)
+                .getResultList()
+                .stream().findFirst();
     }
 
     public Optional<Member> findByEmail(String email){
