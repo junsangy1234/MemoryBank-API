@@ -24,7 +24,7 @@ public class Workspace {
     @JoinColumn(name = "member_id")
     private Member member;
 
-    @OneToMany(mappedBy = "workspace")
+    @OneToMany(mappedBy = "workspace", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Memory> memories = new ArrayList<>();
 
     @Builder

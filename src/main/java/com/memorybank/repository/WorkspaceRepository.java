@@ -58,6 +58,9 @@ public class WorkspaceRepository {
         em.createQuery("DELETE FROM Memory m WHERE m.workspace = :workspace")
                 .setParameter("workspace", workspace)
                 .executeUpdate();
+        em.createQuery("DELETE FROM MemorySyncJob mj WHERE mj.workspace = :workspace")
+                .setParameter("workspace", workspace)
+                .executeUpdate();
         em.remove(workspace);
     }
 }
