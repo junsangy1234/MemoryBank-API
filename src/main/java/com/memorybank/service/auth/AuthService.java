@@ -72,6 +72,6 @@ public class AuthService {
                 .map(w -> new WorkspaceDto(w.getId(), w.getName()))
                 .toList();
 
-        return new LoginResponse(member.getApiKey(), member.getEmail(), member.getName(), member.getDailyCredits(), workspaceDtos );
+        return new LoginResponse(member.getApiKey(), member.getEmail(), member.getName(), member.getDailyCredits(), member.getRole().name(),workspaceDtos );
     }
 }

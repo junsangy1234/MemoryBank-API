@@ -9,5 +9,6 @@ public record LoginResponse(
         String email,
         String name,
         int dailyCredits,
+        String role,
         List<WorkspaceDto> workspaces
 ) {}

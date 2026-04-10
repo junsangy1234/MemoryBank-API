@@ -87,4 +87,17 @@ public class MemoryController {
 
         return ResponseEntity.ok("전체 대화 수집 완료. (임시 ID: " + savedJobId + ")");
     }
+
+    @GetMapping("/full-save/{jobId}/status")
+    public ResponseEntity<java.util.Map<String, String>> checkFullSaveStatus(
+            @RequestHeader("X-API-KEY") String apiKey,
+            @PathVariable Long jobId) {
+
+        Member member = memberService.findByApiKey(apiKey);
+
+        String currentStatus = memoryService.getJobStatus(jobId, member.getId());
+
+        // 프론트엔드가 JSON으로 쉽게 파싱할 수 있게 맵으로 감싸서 응답
+        return ResponseEntity.ok(java.util.Map.of("status", currentStatus));
+    }
 }

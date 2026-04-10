@@ -144,6 +144,18 @@ public class MemoryService {
         }
     }
 
+    //전체 저장 3단계: 상태확인
+    public String getJobStatus(Long jobId, Long memberId){
+        MemorySyncJob job = memorySyncJobRepository.findByIdWithMember(jobId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 작업입니다."));
+
+        if (!job.getWorkspace().getMember().getId().equals(memberId)) {
+            throw new IllegalStateException("해당 작업의 상태를 조회할 권한이 없습니다.");
+        }
+
+        return job.getStatus().name();
+    }
+
     @Transactional
     public List<String> searchSimilarMemories(Long memberId, Long workspaceId, String question, int topK, float threshold) {
         Workspace workspace = workspaceService.findByIdWithMember(workspaceId);

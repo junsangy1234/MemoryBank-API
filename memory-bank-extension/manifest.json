@@ -25,7 +25,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://chatgpt.com/*", "https://gemini.google.com/*"],
+      "matches": ["https://chatgpt.com/*", "https://gemini.google.com/*", "https://claude.ai/*", "https://grok.com/*", "https://chat.deepseek.com/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
