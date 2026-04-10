@@ -3,23 +3,24 @@ package com.memorybank.service.memory;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.memorybank.domain.CreditPolicy;
-import com.memorybank.domain.Member;
-import com.memorybank.domain.Memory;
-import com.memorybank.domain.Workspace;
+import com.memorybank.domain.*;
 import com.memorybank.dto.memory.ExtractionMemoryResult;
+import com.memorybank.dto.memory.FullSaveRequest;
 import com.memorybank.dto.memory.SyncMemoryDto;
 import com.memorybank.dto.memory.SyncResponse;
 import com.memorybank.repository.MemberRepository;
 import com.memorybank.repository.MemoryRepository;
+import com.memorybank.repository.MemorySyncJobRepository;
 import com.memorybank.service.WorkspaceService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -30,6 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -38,6 +40,7 @@ public class MemoryService {
     private final MemoryRepository memoryRepository;
     private final WorkspaceService workspaceService;
     private final MemberRepository memberRepository;
+    private final MemorySyncJobRepository memorySyncJobRepository;
 
     // Spring Ai 추상화 모델
     private final EmbeddingModel embeddingModel;
@@ -84,6 +87,114 @@ public class MemoryService {
         }
 
         // [Route B] 300자가 넘거나 코드가 포함된 경우, 목적(type)에 따라 지시를 다르게 내립니다.
+        return executeAiExtractionAndSave(workspace, content, type);
+    }
+
+    // 전체저장 1단계: PENDING 임시저장
+    @Transactional
+    public Long initiateFullSave(Long memberId, FullSaveRequest request){
+        Workspace workspace = workspaceService.findByIdWithMember(request.workspaceId());
+
+        if(!workspace.getMember().getId().equals(memberId)){
+            throw new IllegalStateException("해당 워크스페이스에 대한 접근 권한이 없습니다.");
+        }
+
+        // MemorySyncJob(작업 큐) 엔티티를 생성하고 저장합니다.
+        MemorySyncJob pendingJob = MemorySyncJob.createPendingJob(
+                workspace,
+                request.rawContent(),
+                request.estimatedCredits()
+        );
+
+        memorySyncJobRepository.save(pendingJob);
+
+        log.info("🟡 [전체 저장] 임시 작업 큐 저장 완료. Job ID: {}, 견적 토큰: {}", pendingJob.getId(), pendingJob.getEstimatedCredits());
+
+        return pendingJob.getId();
+    }
+
+    // 전체저장 2단계
+    @Async("fullSaveExecutor")
+    @Transactional
+    public void processFullSave(Long jobId){
+        MemorySyncJob job = memorySyncJobRepository.findByIdWithMember(jobId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 작업입니다."));
+
+        if(job.getStatus() != SyncStatus.PENDING){
+            log.warn("이미 처리 중이거나 완료된 작업입니다. Job ID: {}", jobId);
+            return;
+        }
+
+        try{
+            Member member = job.getWorkspace().getMember();
+            //잔여 토큰 확인후 토큰 차감
+            member.useCredit(job.getEstimatedCredits());
+
+            log.info("💳 Job ID {}: 토큰 {}개 차감 완료", jobId, job.getEstimatedCredits());
+
+            // AI 작업 및 저장
+            executeAiExtractionAndSave(job.getWorkspace(), job.getRawContent(), "FULL_CONV");
+
+            job.markAsCompleted();
+            log.info("🟢 Job ID {}: 전체 저장 성공!", jobId);
+        }catch (Exception e){
+            job.markAsFailed();
+            log.error("🔴 Job ID {}: 전체 저장 실패!", jobId, e);
+            throw new RuntimeException("전체 저장 처리 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    @Transactional
+    public List<String> searchSimilarMemories(Long memberId, Long workspaceId, String question, int topK, float threshold) {
+        Workspace workspace = workspaceService.findByIdWithMember(workspaceId);
+
+        if (!workspace.getMember().getId().equals(memberId)) {
+            throw new IllegalStateException("해당 워크스페이스에 대한 접근 권한이 없습니다.");
+        }
+
+
+        //검색 크레딧 사용(1)
+        Member manageMember = memberRepository.findById(memberId).get();
+        manageMember.useCredit(CreditPolicy.SEARCH_COST);
+
+        float[] questionVector = embeddingModel.embed(question);
+        memoryRepository.debugDistances(workspaceId, questionVector);
+        List<Memory> similarMemories = memoryRepository.findTopKSimilarMemories(workspaceId, questionVector, topK, threshold);
+
+        return similarMemories.stream()
+                .map(Memory::getContent)
+                .toList();
+    }
+
+    @Transactional
+    public SyncResponse getMemoriesForSync(Long memberId, Long workspaceId, Long lastId, int limit) {
+        Workspace workspace = workspaceService.findByIdWithMember(workspaceId);
+
+        if (!workspace.getMember().getId().equals(memberId)) {
+            throw new IllegalStateException("해당 워크스페이스에 대한 접근 권한이 없습니다.");
+        }
+
+        //불러오기시 크레딧 사용(2)
+        Member manageMember = memberRepository.findById(memberId).get();
+        manageMember.useCredit(CreditPolicy.LOAD_COST);
+
+        // 💡 Pageable 없이 limit 숫자를 바로 넘깁니다! (훨씬 직관적)
+        List<Memory> memories = memoryRepository.findMemoriesForSync(workspaceId, lastId, limit);
+
+        // 남은 전체 개수 계산 (더 가져오기 UI를 위해)
+        long remainingCount = memoryRepository.countRemainingMemories(workspaceId, lastId);
+        boolean hasMore = remainingCount > memories.size();
+
+        // 엔티티 -> record DTO 변환
+        List<SyncMemoryDto> dtoList = memories.stream()
+                .map(m -> new SyncMemoryDto(m.getId(), m.getContent()))
+                .toList();
+
+        return new SyncResponse(dtoList, hasMore, remainingCount);
+    }
+
+    private List<Long> executeAiExtractionAndSave(Workspace workspace, String content, String type) {
+        List<Long> saveIds = new ArrayList<>();
         String systemInstruction;
         String targetModel;
 
@@ -197,54 +308,5 @@ public class MemoryService {
         }
 
         return saveIds;
-    }
-
-    @Transactional
-    public List<String> searchSimilarMemories(Long memberId, Long workspaceId, String question, int topK, float threshold) {
-        Workspace workspace = workspaceService.findByIdWithMember(workspaceId);
-
-        if (!workspace.getMember().getId().equals(memberId)) {
-            throw new IllegalStateException("해당 워크스페이스에 대한 접근 권한이 없습니다.");
-        }
-
-
-        //검색 크레딧 사용(1)
-        Member manageMember = memberRepository.findById(memberId).get();
-        manageMember.useCredit(CreditPolicy.SEARCH_COST);
-
-        float[] questionVector = embeddingModel.embed(question);
-        memoryRepository.debugDistances(workspaceId, questionVector);
-        List<Memory> similarMemories = memoryRepository.findTopKSimilarMemories(workspaceId, questionVector, topK, threshold);
-
-        return similarMemories.stream()
-                .map(Memory::getContent)
-                .toList();
-    }
-
-    @Transactional
-    public SyncResponse getMemoriesForSync(Long memberId, Long workspaceId, Long lastId, int limit) {
-        Workspace workspace = workspaceService.findByIdWithMember(workspaceId);
-
-        if (!workspace.getMember().getId().equals(memberId)) {
-            throw new IllegalStateException("해당 워크스페이스에 대한 접근 권한이 없습니다.");
-        }
-
-        //불러오기시 크레딧 사용(2)
-        Member manageMember = memberRepository.findById(memberId).get();
-        manageMember.useCredit(CreditPolicy.LOAD_COST);
-
-        // 💡 Pageable 없이 limit 숫자를 바로 넘깁니다! (훨씬 직관적)
-        List<Memory> memories = memoryRepository.findMemoriesForSync(workspaceId, lastId, limit);
-
-        // 남은 전체 개수 계산 (더 가져오기 UI를 위해)
-        long remainingCount = memoryRepository.countRemainingMemories(workspaceId, lastId);
-        boolean hasMore = remainingCount > memories.size();
-
-        // 엔티티 -> record DTO 변환
-        List<SyncMemoryDto> dtoList = memories.stream()
-                .map(m -> new SyncMemoryDto(m.getId(), m.getContent()))
-                .toList();
-
-        return new SyncResponse(dtoList, hasMore, remainingCount);
     }
 }

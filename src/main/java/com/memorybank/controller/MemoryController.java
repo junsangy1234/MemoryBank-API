@@ -1,11 +1,9 @@
 package com.memorybank.controller;
 
 import com.memorybank.domain.Member;
+import com.memorybank.domain.Role;
 import com.memorybank.dto.common.Result;
-import com.memorybank.dto.memory.MemoryDto;
-import com.memorybank.dto.memory.SaveMemoryRequest;
-import com.memorybank.dto.memory.SaveMemoryResponse;
-import com.memorybank.dto.memory.SyncResponse;
+import com.memorybank.dto.memory.*;
 import com.memorybank.service.member.MemberService;
 import com.memorybank.service.memory.MemoryQueryService;
 import com.memorybank.service.memory.MemoryService;
@@ -69,5 +67,24 @@ public class MemoryController {
 
         SyncResponse response = memoryService.getMemoriesForSync(member.getId(), workspaceId, lastId, limit);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/full-save/init")
+    public ResponseEntity<String> initFullSave(
+            @RequestHeader("X-API-KEY") String apiKey,
+            @RequestBody FullSaveRequest request){
+        Member member = memberService.findByApiKey(apiKey);
+
+        //Lite등급 이상인지 확인
+        if(member.getRole() == Role.FREE){
+            throw new IllegalStateException("전체 저장 기능은 LITE 등급 이상부터 사용 가능합니다. 업그레이드해주세요!");
+        }
+
+        //임시 저장
+        Long savedJobId = memoryService.initiateFullSave(member.getId(), request);
+
+        memoryService.processFullSave(savedJobId);
+
+        return ResponseEntity.ok("전체 대화 수집 완료. (임시 ID: " + savedJobId + ")");
     }
 }
