@@ -1,6 +1,7 @@
 package com.memorybank.controller;
 
 import com.memorybank.domain.Member;
+import com.memorybank.domain.MemorySyncJob;
 import com.memorybank.domain.Role;
 import com.memorybank.dto.common.Result;
 import com.memorybank.dto.memory.*;
@@ -11,7 +12,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/memories")
@@ -89,15 +92,18 @@ public class MemoryController {
     }
 
     @GetMapping("/full-save/{jobId}/status")
-    public ResponseEntity<java.util.Map<String, String>> checkFullSaveStatus(
+    public ResponseEntity<Map<String, Serializable>> checkFullSaveStatus(
             @RequestHeader("X-API-KEY") String apiKey,
             @PathVariable Long jobId) {
 
         Member member = memberService.findByApiKey(apiKey);
 
-        String currentStatus = memoryService.getJobStatus(jobId, member.getId());
+        MemorySyncJob job = memoryService.getJobStatusWithProgress(jobId, member.getId());
 
-        // 프론트엔드가 JSON으로 쉽게 파싱할 수 있게 맵으로 감싸서 응답
-        return ResponseEntity.ok(java.util.Map.of("status", currentStatus));
+        return ResponseEntity.ok(Map.of(
+                "status", job.getStatus().name(),
+                "processed", job.getProcessedChunks() != null ? job.getProcessedChunks() : 0,
+                "total", job.getTotalChunks() != null ? job.getTotalChunks() : 0
+        ));
     }
 }

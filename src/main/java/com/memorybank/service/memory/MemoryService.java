@@ -177,6 +177,18 @@ public class MemoryService {
         }
     }
 
+    public MemorySyncJob getJobStatusWithProgress(Long jobId, Long memberId) {
+        MemorySyncJob job = memorySyncJobRepository.findByIdWithMember(jobId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 작업입니다."));
+
+        if (!job.getWorkspace().getMember().getId().equals(memberId)) {
+            throw new IllegalStateException("해당 작업의 상태를 조회할 권한이 없습니다.");
+        }
+
+        // String(상태 글자)만 반환하던 것을, 퍼센트 계산을 위해 job(객체) 통째로 반환합니다.
+        return job;
+    }
+
     @Transactional
     public List<String> searchSimilarMemories(Long memberId, Long workspaceId, String question, int topK, float threshold) {
         Workspace workspace = workspaceService.findByIdWithMember(workspaceId);
