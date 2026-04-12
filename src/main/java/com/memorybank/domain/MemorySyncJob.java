@@ -29,6 +29,9 @@ public class MemorySyncJob {
 
     private LocalDateTime createdAt;
 
+    private Integer totalChunks = 0;
+    private Integer processedChunks = 0;
+
     public static MemorySyncJob createPendingJob(Workspace workspace, String rawContent, int estimatedCredits) {
         MemorySyncJob job = new MemorySyncJob();
         job.workspace = workspace;
@@ -45,5 +48,10 @@ public class MemorySyncJob {
 
     public void markAsFailed() {
         this.status = SyncStatus.FAILED;
+    }
+
+    public void updateProgress(int processed, int total) {
+        this.processedChunks = processed;
+        this.totalChunks = total;
     }
 }

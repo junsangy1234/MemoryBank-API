@@ -16,6 +16,15 @@ public class MemorySyncJobRepository {
         em.persist(memorySyncJob);
     }
 
+    public void saveAndFlush(MemorySyncJob memorySyncJob) {
+        if (memorySyncJob.getId() == null) {
+            em.persist(memorySyncJob);
+        } else {
+            em.merge(memorySyncJob);
+        }
+        em.flush();
+    }
+
     public Optional<MemorySyncJob> findByIdWithMember(Long jobId){
         return em.createQuery("SELECT j FROM MemorySyncJob j"
                         + " JOIN FETCH j.workspace w"

@@ -57,8 +57,15 @@ public class MemoryService {
     @Value("${spring.ai.openai.base-url:https://api.openai.com}")
     private String baseUrl;
 
+    private static final int MAX_SINGLE_SAVE_CHARS = 5000;
+
     @Transactional
     public List<Long> saveMemory(Long memberId, Long workspaceId, String content, String type) {
+        // 텍스트가 너무 길면 거부합니다.
+        if (content != null && content.length() > MAX_SINGLE_SAVE_CHARS) {
+            throw new IllegalArgumentException("단일 저장 허용 범위를 초과했습니다. (최대 " + MAX_SINGLE_SAVE_CHARS + "자). 전체 스캔 기능을 이용해주세요.");
+        }
+
         Workspace workspace = workspaceService.findByIdWithMember(workspaceId);
 
         if (!workspace.getMember().getId().equals(memberId)) {
@@ -87,7 +94,13 @@ public class MemoryService {
         }
 
         // [Route B] 300자가 넘거나 코드가 포함된 경우, 목적(type)에 따라 지시를 다르게 내립니다.
-        return executeAiExtractionAndSave(workspace, content, type);
+        // 서버 메모리가 터지지 않도록 무조건 2,000자씩 잘라서(Chunking) 순차적으로 AI에 던집니다.
+        List<String> chunks = splitContent(content, 2000);
+        for (String chunk : chunks) {
+            // 잘린 조각들을 하나씩 AI 처리 후 DB에 저장하고, ID를 리스트에 합칩니다.
+            saveIds.addAll(executeAiExtractionAndSave(workspace, chunk, type));
+        }
+        return saveIds;
     }
 
     // 전체저장 1단계: PENDING 임시저장
@@ -127,33 +140,41 @@ public class MemoryService {
 
         try{
             Member member = job.getWorkspace().getMember();
-            //잔여 토큰 확인후 토큰 차감
-            member.useCredit(job.getEstimatedCredits());
-
+            member.useCredit(job.getEstimatedCredits()); // 토큰 차감
             log.info("💳 Job ID {}: 토큰 {}개 차감 완료", jobId, job.getEstimatedCredits());
 
-            // AI 작업 및 저장
-            executeAiExtractionAndSave(job.getWorkspace(), job.getRawContent(), "FULL_CONV");
+            // 1. 300만 자를 2000자 단위로 쪼갭니다.
+            List<String> chunks = splitContent(job.getRawContent(), 2000);
+
+            // 2. 전체 조각 개수를 DB에 세팅 (대시보드의 분모가 됩니다)
+            job.updateProgress(0, chunks.size());
+            memorySyncJobRepository.saveAndFlush(job); // 즉시 DB 반영
+
+            // 3. 조각들을 하나씩 AI에게 던집니다.
+            for (int i = 0; i < chunks.size(); i++) {
+                String chunkText = chunks.get(i);
+
+                // 쪼개진 2000자만 AI에게 전송 (메모리 및 토큰 안전!)
+                executeAiExtractionAndSave(job.getWorkspace(), chunkText, "FULL_CONV");
+
+                // 한 조각 끝날 때마다 진행률 DB 업데이트 (대시보드의 분자가 됩니다)
+                job.updateProgress(i + 1, chunks.size());
+                // JPA 1차 캐시를 무시하고 즉시 DB에 꽂아 넣어서 프론트엔드가 실시간으로 볼 수 있게 함
+                memorySyncJobRepository.saveAndFlush(job);
+
+                log.info("⏳ Job ID {}: 진행률 {}/{} 완료", jobId, i+1, chunks.size());
+            }
 
             job.markAsCompleted();
+            memorySyncJobRepository.saveAndFlush(job);
             log.info("🟢 Job ID {}: 전체 저장 성공!", jobId);
-        }catch (Exception e){
+
+        } catch (Exception e){
             job.markAsFailed();
+            memorySyncJobRepository.saveAndFlush(job);
             log.error("🔴 Job ID {}: 전체 저장 실패!", jobId, e);
             throw new RuntimeException("전체 저장 처리 중 오류가 발생했습니다.", e);
         }
-    }
-
-    //전체 저장 3단계: 상태확인
-    public String getJobStatus(Long jobId, Long memberId){
-        MemorySyncJob job = memorySyncJobRepository.findByIdWithMember(jobId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 작업입니다."));
-
-        if (!job.getWorkspace().getMember().getId().equals(memberId)) {
-            throw new IllegalStateException("해당 작업의 상태를 조회할 권한이 없습니다.");
-        }
-
-        return job.getStatus().name();
     }
 
     @Transactional
@@ -320,5 +341,16 @@ public class MemoryService {
         }
 
         return saveIds;
+    }
+
+    private List<String> splitContent(String content, int chunkSize) {
+        List<String> chunks = new ArrayList<>();
+        if (content == null || content.isEmpty()) return chunks;
+
+        int length = content.length();
+        for (int i = 0; i < length; i += chunkSize) {
+            chunks.add(content.substring(i, Math.min(length, i + chunkSize)));
+        }
+        return chunks;
     }
 }
