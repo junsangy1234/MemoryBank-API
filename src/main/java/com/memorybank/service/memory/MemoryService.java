@@ -140,7 +140,8 @@ public class MemoryService {
 
         try{
             Member member = job.getWorkspace().getMember();
-            member.useCredit(job.getEstimatedCredits()); // 토큰 차감
+            member.useCredit(0);
+            //member.useCredit(job.getEstimatedCredits()); // 토큰 차감
             log.info("💳 Job ID {}: 토큰 {}개 차감 완료", jobId, job.getEstimatedCredits());
 
             // 1. 300만 자를 2000자 단위로 쪼갭니다.

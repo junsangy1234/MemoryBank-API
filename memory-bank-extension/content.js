@@ -252,7 +252,9 @@ function injectFloatingMenu() {
             const rawFinalText = collectedChunks.join('\n\n'); const textLength = rawFinalText.length;
             if (textLength < 10) { alert("새로 스캔할 대화 내용이 없습니다."); unlockScanBtn(); return; }
 
-            const estimatedCredits = Math.ceil(textLength / 500) * 3;
+            //토큰 비용
+            const estimatedCredits = 0;
+
             // 🌟 새 플래그용 텍스트 (방금 스캔한 내용의 맨 마지막 버블)
             const newBubblesAfterScroll = document.querySelectorAll(siteConfig[currentPlatform]);
             const newFlagText = newBubblesAfterScroll[newBubblesAfterScroll.length - 1]?.innerText || "";
