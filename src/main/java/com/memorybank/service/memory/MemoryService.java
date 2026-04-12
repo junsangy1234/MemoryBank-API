@@ -95,7 +95,7 @@ public class MemoryService {
 
         // [Route B] 300자가 넘거나 코드가 포함된 경우, 목적(type)에 따라 지시를 다르게 내립니다.
         // 서버 메모리가 터지지 않도록 무조건 2,000자씩 잘라서(Chunking) 순차적으로 AI에 던집니다.
-        List<String> chunks = splitContent(content, 2000);
+        List<String> chunks = splitContent(content, 50000);
         for (String chunk : chunks) {
             // 잘린 조각들을 하나씩 AI 처리 후 DB에 저장하고, ID를 리스트에 합칩니다.
             saveIds.addAll(executeAiExtractionAndSave(workspace, chunk, type));
@@ -144,8 +144,8 @@ public class MemoryService {
             //member.useCredit(job.getEstimatedCredits()); // 토큰 차감
             log.info("💳 Job ID {}: 토큰 {}개 차감 완료", jobId, job.getEstimatedCredits());
 
-            // 1. 300만 자를 2000자 단위로 쪼갭니다.
-            List<String> chunks = splitContent(job.getRawContent(), 2000);
+            // 1. 300만 자를 50000 단위로 쪼갭니다.
+            List<String> chunks = splitContent(job.getRawContent(), 50000);
 
             // 2. 전체 조각 개수를 DB에 세팅 (대시보드의 분모가 됩니다)
             job.updateProgress(0, chunks.size());
@@ -155,7 +155,7 @@ public class MemoryService {
             for (int i = 0; i < chunks.size(); i++) {
                 String chunkText = chunks.get(i);
 
-                // 쪼개진 2000자만 AI에게 전송 (메모리 및 토큰 안전!)
+                // 쪼개진 50000자만 AI에게 전송 (메모리 및 토큰 안전!)
                 executeAiExtractionAndSave(job.getWorkspace(), chunkText, "FULL_CONV");
 
                 // 한 조각 끝날 때마다 진행률 DB 업데이트 (대시보드의 분자가 됩니다)
