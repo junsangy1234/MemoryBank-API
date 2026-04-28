@@ -156,7 +156,7 @@ document.getElementById('login-btn').addEventListener('click', () => {
                 workspaces: data.workspaces,
                 dailyCredits: fetchedCredits
             }, () => {
-                showLoggedInUI(data.name, data.workspaces, defaultWorkspaceId, false, fetchedCredits, safeRole);
+                showLoggedInUI(data.name, data.workspaces, defaultWorkspaceId, false, fetchedCredits, safeRole, data.hasStarterPack || false);
                 document.getElementById('history-container').style.display = 'block';
 
                 const tabMenu = document.getElementById('tab-menu');
@@ -173,7 +173,7 @@ document.getElementById('login-btn').addEventListener('click', () => {
     });
 });
 
-function showLoggedInUI(name, workspaces, currentWsId, isSaving, credits, role) {
+function showLoggedInUI(name, workspaces, currentWsId, isSaving, credits, role, hasStarterPack) {
     document.getElementById('login-btn').style.display = 'none';
     document.getElementById('desc').style.display = 'none';
 
@@ -189,7 +189,7 @@ function showLoggedInUI(name, workspaces, currentWsId, isSaving, credits, role) 
 
     let roleHtml = `<span class="role-badge ${role.toLowerCase()}">${role}</span>`;
 
-    // 🌟 스타터팩 구매자에게만 훈장 뱃지 추가!
+    // 🌟 파라미터로 받은 hasStarterPack을 안전하게 검사
     if (hasStarterPack) {
         roleHtml += `<span title="스타터팩 평생 소장" style="font-size: 15px; margin-left: 5px; vertical-align: middle; cursor: help; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1));">💎</span>`;
     }
