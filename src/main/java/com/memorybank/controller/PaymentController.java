@@ -24,9 +24,10 @@ public class PaymentController {
             @RequestBody Map<String, String> request) {
 
         Member member = memberService.findByApiKey(apiKey);
-        String plan = request.get("plan"); // "PRO" 또는 "PREMIUM"
-
-        if ("PRO".equals(plan)) {
+        String plan = request.get("plan"); // "LITE", "PRO","PREMIUM"
+        if("LITE".equals(plan)) {
+            member.upgradeRole(Role.LITE);
+        }if ("PRO".equals(plan)) {
             member.upgradeRole(Role.PRO);
         } else if ("PREMIUM".equals(plan)) {
             member.upgradeRole(Role.PREMIUM);

@@ -1,6 +1,6 @@
 server:
   tomcat:
-    max-http-form-post-size: 100MB
+    max-http-form-post-size: 20MB
 
 spring:
   datasource:
@@ -10,8 +10,8 @@ spring:
     driver-class-name: org.postgresql.Driver
   servlet:
     multipart:
-      max-file-size: 100MB
-      max-request-size: 100MB
+      max-file-size: 20MB
+      max-request-size: 20MB
   jpa:
     hibernate:
       ddl-auto: update

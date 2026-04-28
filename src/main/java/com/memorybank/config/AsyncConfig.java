@@ -11,20 +11,17 @@ import java.util.concurrent.Executor;
 @Configuration
 public class AsyncConfig {
 
-    @Bean(name = "fullSaveExecutor")
-    public Executor threadPoolTaskExecutor() {
+    @Bean(name = "aiTaskExecutor")
+    public Executor aiTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 
-        // 🌟 1. 기본 바리스타 수 (평소에 대기하는 인원)
-        executor.setCorePoolSize(2);
+        executor.setCorePoolSize(20);
+        executor.setMaxPoolSize(20);
 
-        // 🌟 2. 최대 바리스타 수 (주문이 아무리 밀려도 이 이상 고용 안 함!)
-        executor.setMaxPoolSize(3);
+        executor.setQueueCapacity(10000);
 
-        // 🌟 3. 대기열 크기 (주문표 100개까지는 큐에 쌓아둠)
-        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("AI-Worker-");
 
-        executor.setThreadNamePrefix("AI-Save-");
         executor.initialize();
         return executor;
     }

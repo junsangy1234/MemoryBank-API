@@ -32,6 +32,9 @@ public class Member {
     @Enumerated(EnumType.STRING)
     private Role role = Role.FREE;
 
+    @Column(nullable = false)
+    private boolean hasStarterPack = false;
+
     private int dailyCredits = 30; //기본 크레딧
 
     private LocalDate lastCreditResetDate = LocalDate.now();
@@ -57,6 +60,7 @@ public class Member {
 
             //등급에 따라 리셋
             if(this.role == Role.FREE) this.dailyCredits = 30;
+            else if(this.role == Role.LITE) this.dailyCredits = 100;
             else if(this.role == Role.PRO) this.dailyCredits = 500;
             else if(this.role == Role.PREMIUM) this.dailyCredits = 2000;
         }
@@ -78,10 +82,16 @@ public class Member {
         this.dailyCredits += amount;
     }
 
+    public void unlockStarterPack() {
+        this.hasStarterPack = true; // 전체스캔 평생 해금
+        this.dailyCredits += 100;   // 1회성 100 크레딧 보너스 충전
+    }
+
     public void upgradeRole(Role newRole) {
         this.role = newRole;
         // 등급 업그레이드 즉시 해당 등급의 최대 크레딧으로 충전
-        if (newRole == Role.PRO) this.dailyCredits = 500;
+        if (newRole == Role.LITE) this.dailyCredits = 100;
+        else if (newRole == Role.PRO) this.dailyCredits = 500;
         else if (newRole == Role.PREMIUM) this.dailyCredits = 2000;
         this.lastCreditResetDate = LocalDate.now();
     }

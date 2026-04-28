@@ -1,10 +1,13 @@
 package com.memorybank.repository;
 
 import com.memorybank.domain.MemorySyncJob;
+import com.memorybank.domain.SyncStatus;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -33,5 +36,16 @@ public class MemorySyncJobRepository {
                 .setParameter("id", jobId)
                 .getResultList()
                 .stream().findFirst();
+    }
+
+    // 좀비 작업(1시간 이상 PENDING 상태인 작업) 조회 메서드
+    public List<MemorySyncJob> findZombieJobs(SyncStatus status, LocalDateTime beforeTime) {
+        return em.createQuery("SELECT j FROM MemorySyncJob j"
+                        + " JOIN FETCH j.workspace w"
+                        + " JOIN FETCH w.member"
+                        + " WHERE j.status = :status AND j.createdAt < :beforeTime", MemorySyncJob.class)
+                .setParameter("status", status)
+                .setParameter("beforeTime", beforeTime)
+                .getResultList();
     }
 }

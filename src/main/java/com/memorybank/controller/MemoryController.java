@@ -79,13 +79,12 @@ public class MemoryController {
         Member member = memberService.findByApiKey(apiKey);
 
         //Lite등급 이상인지 확인
-        if(member.getRole() == Role.FREE){
-            throw new IllegalStateException("전체 저장 기능은 LITE 등급 이상부터 사용 가능합니다. 업그레이드해주세요!");
+        if(member.getRole() == Role.FREE && !member.isHasStarterPack()){
+            throw new IllegalStateException("전체 저장 기능은 스타터팩 구매 또는 LITE 등급 이상부터 사용 가능합니다.");
         }
 
         //임시 저장
         Long savedJobId = memoryService.initiateFullSave(member.getId(), request);
-
         memoryService.processFullSave(savedJobId);
 
         return ResponseEntity.ok("전체 대화 수집 완료. (임시 ID: " + savedJobId + ")");
