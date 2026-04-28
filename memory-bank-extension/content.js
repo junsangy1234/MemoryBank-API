@@ -80,12 +80,13 @@ function getFlagKey(auth) {
 
 function getAuthInfo() {
     return new Promise(resolve => {
-        chrome.storage.local.get(['memoryBankApiKey', 'currentWorkspaceId', 'userEmail', 'userRole'], result => {
+        chrome.storage.local.get(['memoryBankApiKey', 'currentWorkspaceId', 'userEmail', 'userRole', 'hasStarterPack'], result => {
             resolve({
                 apiKey: result.memoryBankApiKey,
                 workspaceId: result.currentWorkspaceId,
                 userEmail: result.userEmail,
-                userRole: result.userRole || 'FREE'
+                userRole: result.userRole || 'FREE',
+                hasStarterPack: result.hasStarterPack || false
             });
         });
     });
@@ -429,7 +430,7 @@ function injectFloatingMenu() {
         try {
             const auth = await getAuthInfo();
             if (!auth.apiKey || !auth.workspaceId) { showLoginPrompt(); return; }
-            if (auth.userRole === 'FREE') { alert("🔒 전체 대화 스캔 기능은 LITE 등급 이상부터 사용 가능합니다."); return; }
+            if (auth.userRole === 'FREE' && !auth.hasStarterPack) { alert("🔒 전체 대화 스캔 기능은 LITE 등급 이상부터 사용 가능합니다."); return; }
 
             const currentPlatform = getCurrentPlatform();
             if (!currentPlatform) { alert("❌ 지원하지 않는 플랫폼입니다."); return; }

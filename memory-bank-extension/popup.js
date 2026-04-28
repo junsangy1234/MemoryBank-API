@@ -1,11 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.get(
-        ['memoryBankApiKey', 'userName', 'userRole', 'currentWorkspaceId', 'workspaces', 'isSavingInProgress', 'dailyCredits'],
+        // 🌟 hasStarterPack 추가
+        ['memoryBankApiKey', 'userName', 'userRole', 'currentWorkspaceId', 'workspaces', 'isSavingInProgress', 'dailyCredits', 'hasStarterPack'],
         (data) => {
             if (!data.memoryBankApiKey || !data.workspaces) return;
 
-            // 🌟 [핵심 픽스] userRole이 비어있으면 'FREE'로 강제 지정하여 에러 방지
             const currentRole = data.userRole || 'FREE';
+            const hasStarterPack = data.hasStarterPack || false; // 🌟 추가
 
             showLoggedInUI(
                 data.userName,
@@ -13,16 +14,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 data.currentWorkspaceId,
                 data.isSavingInProgress,
                 data.dailyCredits ?? 0,
-                currentRole
+                currentRole,
+                hasStarterPack // 🌟 파라미터 추가
             );
 
-            // 🌟 함수의 인자가 아니라, 밖으로 빼서 안전하게 독립 실행!
             const tabMenu = document.getElementById('tab-menu');
             if (tabMenu) tabMenu.style.display = 'flex';
-
             updateStoreVisibility(currentRole);
 
-            silentRefreshUserData();
+            silentRefreshUserData(); // 이제 팝업 열 때마다 실시간 동기화됨!
             checkActiveJobProgress();
             renderHistory();
         }
@@ -30,14 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function silentRefreshUserData() {
-    chrome.storage.local.get(['memoryBankApiKey', 'lastCreditResetDate', 'userRole'], async (data) => {
+    chrome.storage.local.get(['memoryBankApiKey', 'userRole'], async (data) => {
         if (!data.memoryBankApiKey) return;
-
-        const today = new Date().toISOString().slice(0, 10);
-        const lastReset = data.lastCreditResetDate || "";
-        const isNewDay = today !== lastReset;
-
-        if (!isNewDay) return;
 
         try {
             const response = await fetch("https://aimemorybank.cloud/api/members/me", {
@@ -45,19 +39,18 @@ async function silentRefreshUserData() {
                 headers: { "X-API-KEY": data.memoryBankApiKey }
             });
 
-            if (!response.ok) {
-                await silentRefreshViaGoogleToken(today);
-                return;
-            }
+            if (response.ok) {
+                const result = await response.json();
 
-            const result = await response.json();
-            chrome.storage.local.set({
-                userRole: result.role || data.userRole || 'FREE',
-                dailyCredits: result.dailyCredits ?? 0,
-                lastCreditResetDate: today
-            });
-        } catch {
-            await silentRefreshViaGoogleToken(today);
+                // 🌟 무조건 스토리지 덮어쓰기 (바뀐 값이 있으면 onChange 리스너가 화면을 즉시 새로고침함)
+                chrome.storage.local.set({
+                    userRole: result.role || data.userRole || 'FREE',
+                    dailyCredits: result.dailyCredits ?? 0,
+                    hasStarterPack: result.hasStarterPack || false // DB에서 값 받아오기
+                });
+            }
+        } catch (e) {
+            console.error("실시간 동기화 실패", e);
         }
     });
 }
@@ -194,7 +187,12 @@ function showLoggedInUI(name, workspaces, currentWsId, isSaving, credits, role) 
     const statusMsg = document.getElementById('status-message');
     statusMsg.style.display = 'block';
 
-    const roleHtml = `<span class="role-badge ${role.toLowerCase()}">${role}</span>`;
+    let roleHtml = `<span class="role-badge ${role.toLowerCase()}">${role}</span>`;
+
+    // 🌟 스타터팩 구매자에게만 훈장 뱃지 추가!
+    if (hasStarterPack) {
+        roleHtml += `<span title="스타터팩 평생 소장" style="font-size: 15px; margin-left: 5px; vertical-align: middle; cursor: help; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1));">💎</span>`;
+    }
 
     if (isSaving) {
         lockWorkspaceUI();

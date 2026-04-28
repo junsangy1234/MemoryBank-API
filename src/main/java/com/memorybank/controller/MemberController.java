@@ -8,6 +8,7 @@ import com.memorybank.dto.member.MemberDto;
 import com.memorybank.service.member.MemberQueryService;
 import com.memorybank.service.member.MemberService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,5 +33,11 @@ public class MemberController {
         List<MemberDto> collect = memberQueryService.listMember();
 
         return new Result(collect.size(), collect);
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<MemberDto> getMyInfo(@RequestHeader("X-API-KEY") String apiKey){
+        MemberDto memberInfo = memberService.getMyInfo(apiKey);
+        return org.springframework.http.ResponseEntity.ok(memberInfo);
     }
 }

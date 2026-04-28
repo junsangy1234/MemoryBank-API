@@ -1,6 +1,7 @@
 package com.memorybank.service.member;
 
 import com.memorybank.domain.Member;
+import com.memorybank.dto.member.MemberDto;
 import com.memorybank.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -51,5 +52,16 @@ public class MemberService {
     // AuthService에서 가입 여부를 확인하기 위해 쓸 메서드
     public Optional<Member> findOptionalByEmail(String email) {
         return memberRepository.findByEmail(email);
+    }
+
+    //resetCredits으로 크레딧 변경 상황때문에 Transactional
+    @Transactional
+    public MemberDto getMyInfo(String apiKey){
+        Member member = memberRepository.findByApiKey(apiKey)
+                .orElseThrow(() -> new IllegalArgumentException("유효하지 않는 API키 입니다."));
+
+        member.resetCreditsIfNeeded();
+
+        return MemberDto.from(member);
     }
 }
