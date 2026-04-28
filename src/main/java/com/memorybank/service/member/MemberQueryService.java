@@ -18,7 +18,7 @@ public class MemberQueryService {
     public List<MemberDto> listMember(){
         List<Member> members = memberRepository.findAll();
         return members.stream()
-                .map(m -> new MemberDto(m.getId(), m.getEmail(), m.getApiKey()))
+                .map(m -> MemberDto.from(m))
                 .toList();
     }
 }
