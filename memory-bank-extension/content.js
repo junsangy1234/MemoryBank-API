@@ -576,19 +576,31 @@ function injectFloatingMenu() {
                 const text = getCleanedText(newBubbles[i]);
                 if (!text || seenBubbleTexts.has(text)) continue;
 
-                if (currentLength + text.length > 5000) { isTruncated = true; break; }
+                if (currentLength + text.length > 10000) {
+                    if (cleanedBubbles.length === 0) {
+                        // 맨 처음 담으려는 답변 하나가 10000자 넘을 경우, 튕겨내지 않고 잘라서 넣음
+                        cleanedBubbles.unshift(text.substring(0, 10000) + "\n\n...[내용이 너무 길어 생략됨]");
+                    }
+                    isTruncated = true;
+                    break;
+                }
+
                 seenBubbleTexts.add(text);
                 cleanedBubbles.unshift(text);
                 currentLength += text.length;
             }
 
-            if (cleanedBubbles.length === 0) { alert("⚠️ 새로 저장할 일반 텍스트 대화가 없습니다. (시스템 명령만 존재)"); return; }
+            if (cleanedBubbles.length === 0) {
+                alert("⚠️ 새로 저장할 일반 텍스트 대화가 없습니다. (시스템 명령만 존재)");
+                setBusyState(false);
+                return;
+            }
 
             if (isTruncated) {
                 const proceed = confirm(
-                    `⚠️ 새로운 대화가 너무 많아 단일 저장 한도(5,000자)를 초과했습니다.\n\n가장 최신의 대화만 저장되며, 이전 대화와 저장 지점 사이에 누락이 발생합니다. 이대로 최신 대화만 우선 저장하시겠습니까?\n\n💡 팁: 끊김 없이 저장하려면 '🚀 전체 스캔'을 이용하시거나, 누락된 중간 내용은 필요한 부분만 '드래그하여 우클릭 저장' 하실 수 있습니다.`
+                    `⚠️ 한 번에 저장하기엔 텍스트가 너무 길어 단일 저장 한도(10,000자)에 맞춰 최근 내용만 저장됩니다.\n\n(끊김 없이 모두 저장하려면 '🚀 전체 스캔'을 이용해 주세요.)\n이대로 진행하시겠습니까?`
                 );
-                if (!proceed) return;
+                if (!proceed) { setBusyState(false); return; }
             }
 
             setBusyState(true);

@@ -235,10 +235,63 @@ public class MemoryService {
 
         if ("SNIPPET".equals(type)) {
             targetModel = "gpt-5-nano";
-            systemInstruction = "너는 사용자가 스크랩한 텍스트를 정리하는 AI 데이터 아키텍트야..."; // 축약
+
+            systemInstruction = """
+                            너는 사용자가 웹서핑이나 대화 중 중요하다고 생각하여 직접 드래그해서 스크랩한 텍스트를 정리하는 AI 데이터 아키텍트야.
+                            이 텍스트는 이미 사용자가 필터링한 중요 정보이므로, 원본의 디테일(특히 코드, 명령어, 고유명사, 문제 원인과 해결책)을 절대 훼손하지 마.
+                            
+                            [분류 기준] (무조건 다음 5가지 중 가장 적합한 하나를 선택하여 요약본 맨 앞에 태그로 기재해)
+                            1. [스크랩-트러블슈팅]: 에러 및 버그 해결 방법, 문제 발생 원인과 대처법.
+                            2. [스크랩-코드/기술]: 프로그래밍 코드 스니펫, 터미널 명령어, IT 아키텍처 및 기술 개념.
+                            3. [스크랩-지식/정보]: 웹서핑 중 발견한 객관적인 팩트, 뉴스 기사, 유용한 팁, 방법론.
+                            4. [스크랩-아이디어/영감]: 벤치마킹할 레퍼런스, 기획 아이디어, 인상 깊은 문구.
+                            5. [스크랩-기타]: 위 카테고리에 속하지 않는 단순 메모, 개인적인 기록.
+                            
+                            [지시사항]
+                            1. 텍스트가 너무 길면 핵심 주제별로 1~3개의 조각(summary)으로 나누되, 각 조각은 문맥이 온전히 이어지도록 작성해.
+                            2. 불필요한 인사말, 이모지, 감탄사만 제거하고, 정보의 밀도를 극대화해.
+                            3. 원문에 코드가 있다면 요약본 안에도 반드시 그 코드를 그대로 포함시켜서 문장을 구성해.
+                            4. **[매우 중요: JSON 문법 준수]** summary 문자열 내부에 따옴표(\"), 백슬래시(\\\\\\\\), 또는 \\u 같은 이스케이프 문자를 포함해야 할 경우, 반드시 유효한 JSON 형식에 맞게 이중 이스케이프(\\\\\\\\\\\\\\\\) 처리를 하거나, 오류를 유발할 수 있는 특수 정규식 기호는 일반 텍스트로 풀어써.
+                            5. **[매우 중요: 형식 엄수]** 절대 인사말이나 부연 설명을 덧붙이지 말고, 오직 중괄호 {} 로 시작하고 끝나는 JSON 객체만 출력해.
+                            
+                            [필수 출력 형식] (반드시 JSON)
+                            {
+                                "memories": [
+                                    { "summary": "[스크랩-트러블슈팅] Gemini 대화 JSON 파싱 에러 원인과 해결책: ..." },
+                                    { "summary": "[스크랩-코드/기술] 적용된 핵심 자바스크립트 코드: let uniqueLines = [...new Set(textLines)];" }
+                                ]
+                            }
+                            """;
         } else {
             targetModel = "gpt-5-nano";
-            systemInstruction = "너는 대화 기록에서 중요한 문맥을 추출하는 AI 데이터 아키텍트야..."; // 축약
+
+            systemInstruction = """
+                            너는 대화 기록에서 중요한 문맥과 정보를 추출하여 장기 기억 장소에 저장할 수 있도록 가공하는 AI 데이터 아키텍트야.
+                            제공된 전체 대화를 분석하여, 파편화되지 않은 '독립적이고 완전한 문맥을 가진 정보 덩어리'로 추출해줘.
+                            
+                            [분류 기준] (무조건 다음 5가지 중 가장 적합한 하나만을 선택)
+                            1. [사용자 정보]: 사용자의 인적 사항, 선호도(취향), 가치관, 관계, 습관 등.
+                            2. [지식]: 객관적인 사실, 방법론, 노하우, 학습 내용, 구체적인 정보 등.
+                            3. [이벤트]: 과거에 일어난 일, 미래의 일정, 기념일 등 시간 중심의 기록등.
+                            4. [프로젝트 및 목표]: 목적을 가진 활동, 업무 진행 상황, 개인적 도전 과제 및 계획.
+                            5. [생각]: 사용자의 주관적인 의견, 아이디어, 영감, 감정, 일기 같은 기록.
+                            
+                            [지시사항]
+                            1. 1인칭 대명사(나, 내)나 2인칭 대명사(너) 대신 '사용자' 또는 중립적인 명칭을 사용해.
+                            2. 입력된 텍스트의 길이나 주제의 다양성에 따라 필요한 만큼 무제한으로 기억 조각(summary)을 생성해.
+                            3. 각 조각(summary)은 3~5줄짜리 완성된 덩어리로 작성해.
+                            4. 의미 없는 인사말, 감정 표현, 단순 맞장구는 제외해.
+                            5. **[매우 중요: JSON 문법 준수]** summary 문자열 내부에 코드가 포함될 경우 따옴표(\"), 백슬래시(\\\\\\\\), \\u 등을 엄격하게 이스케이프 처리하여 JSON 파싱(ObjectMapper) 시 에러가 나지 않도록 해.
+                            6. **[매우 중요: 형식 엄수]** 절대 인사말이나 부연 설명을 덧붙이지 말고, 오직 중괄호 {} 로 시작하고 끝나는 JSON 객체만 출력해.
+                            
+                            [필수 출력 형식] (반드시 JSON)
+                            {
+                                "memories": [
+                                    { "summary": "[지식] Spring Boot의 RestTemplate을 사용하면..." },
+                                    { "summary": "[사용자 정보] 사용자는 백엔드 개발에 깊은 이해도를..." }
+                                ]
+                            }
+                            """;
         }
 
         Map<String, Object> requestBody = new HashMap<>();
@@ -258,12 +311,21 @@ public class MemoryService {
         } catch (Exception e) { throw new RuntimeException("API 직접 호출 실패", e); }
 
         String cleanedResponse = llmResponse.trim();
-        if (cleanedResponse.startsWith("```json")) cleanedResponse = cleanedResponse.substring(7, cleanedResponse.length() - 3).trim();
-        else if (cleanedResponse.startsWith("```")) cleanedResponse = cleanedResponse.substring(3, cleanedResponse.length() - 3).trim();
+        int jsonStart = cleanedResponse.indexOf("{");
+        int jsonEnd = cleanedResponse.lastIndexOf("}");
+
+        if (jsonStart != -1 && jsonEnd != -1) {
+            cleanedResponse = cleanedResponse.substring(jsonStart, jsonEnd + 1);
+        } else {
+            throw new RuntimeException("LLM 응답에서 JSON 포맷을 찾을 수 없습니다.");
+        }
 
         ExtractionMemoryResult extraction;
-        try { extraction = objectMapper.readValue(cleanedResponse, ExtractionMemoryResult.class); }
-        catch (JsonProcessingException e) { throw new RuntimeException("JSON 파싱 실패", e); }
+        try {
+            extraction = objectMapper.readValue(cleanedResponse, ExtractionMemoryResult.class);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("JSON 파싱 실패", e);
+        }
 
         if (extraction != null && extraction.memories() != null) {
             for (var item : extraction.memories()) {
