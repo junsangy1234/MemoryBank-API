@@ -25,14 +25,16 @@ public class Member {
 
     @Column(nullable = false, unique = true)
     private String email;
+
     private String name;
+
     @Column(unique = true)
     private String apiKey;
 
     @Enumerated(EnumType.STRING)
     private Role role = Role.FREE;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean hasStarterPack = false;
 
     private int dailyCredits = 30; //기본 크레딧
