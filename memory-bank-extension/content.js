@@ -115,9 +115,13 @@ function showPaywallModal(actionType) {
 
 function insertTextAndTrigger(target, text) {
     target.focus();
+
     if (target.isContentEditable) {
-        target.innerText = '';
-        document.execCommand('insertText', false, text);
+        document.execCommand('selectAll', false, null);
+        const htmlText = text.replace(/\r?\n/g, '<br>');
+        document.execCommand('insertHTML', false, htmlText);
+
+        target.dispatchEvent(new Event('input', { bubbles: true }));
     } else {
         const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
         if (nativeSetter) {
@@ -128,9 +132,16 @@ function insertTextAndTrigger(target, text) {
         target.dispatchEvent(new Event('input', { bubbles: true }));
         target.dispatchEvent(new Event('change', { bubbles: true }));
     }
+
     setTimeout(() => {
-        target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', which: 13, keyCode: 13, bubbles: true }));
-    }, 100);
+        const sendBtn = document.querySelector('button[data-testid="send-button"], button[aria-label*="Send"], button[title*="Send"], .send-button');
+
+        if (sendBtn && !sendBtn.disabled) {
+            sendBtn.click();
+        } else {
+            target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', which: 13, keyCode: 13, bubbles: true }));
+        }
+    }, 200);
 }
 
 // =========================================================
@@ -344,7 +355,13 @@ function injectFloatingMenu() {
     });
 
     const mainBtn = document.createElement('button');
-    mainBtn.innerHTML = '🧠';
+    mainBtn.innerHTML = `
+        <svg width="28" height="28" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="0" width="16" height="16" rx="3" fill="#ffffff"></rect>
+          <circle cx="6.5" cy="6.5" r="4" stroke="#3b82f6" stroke-width="2" fill="none"></circle>
+          <line x1="9.5" y1="9.5" x2="14" y2="14" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"></line>
+        </svg>
+    `;
     mainBtn.id = 'mb-main-fab';
     Object.assign(mainBtn.style, {
         position: 'relative', width: '56px', height: '56px', borderRadius: '50%',
@@ -804,7 +821,7 @@ function initSlashCommandListener() {
 setTimeout(initSlashCommandListener, 2000);
 
 // =========================================================
-// 10. 스마트 나침반
+// 10. 스마트 나침반 (말풍선 개수 카운팅 방식으로 완벽 개선)
 // =========================================================
 let isNavigatorInitialized = false;
 
@@ -907,13 +924,14 @@ async function initSmartNavigator() {
             if (!window.isNavSearching) compass.textContent = "⬆️ Saved Point (Click to find)";
             compass.style.display = 'flex';
 
+            // 🌟 [핵심 픽스] 말풍선(Bubble) 갯수를 카운팅하여 진짜 끝을 판단
             compass.onclick = () => {
                 if (window.isNavSearching) return;
                 window.isNavSearching = true;
                 compass.textContent = "⏳ Finding location...";
 
-                let sameTopCount = 0;
-                let previousScrollHeight = document.documentElement.scrollHeight;
+                let sameBubbleCount = 0;
+                let previousBubbleCount = 0;
 
                 const searchInterval = setInterval(() => {
                     const currentBubbles = document.querySelectorAll(siteConfig[currentPlatform]);
@@ -929,16 +947,26 @@ async function initSmartNavigator() {
                     if (found) {
                         clearInterval(searchInterval);
                         window.isNavSearching = false;
-                        found.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                        found.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                        // 발견 시각적 피드백 제공
+                        const originalBg = found.style.backgroundColor;
+                        found.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                        setTimeout(() => found.style.backgroundColor = originalBg, 2000);
+
+                        compass.textContent = "✅ Found it!";
+                        setTimeout(() => track(), 2000);
                     } else {
+                        // 페이지 내부의 모든 스크롤 가능한 요소를 강제로 맨 위로 올림 (로딩 트리거)
                         window.scrollTo(0, 0);
                         document.querySelectorAll('*').forEach(el => {
                             if (el.scrollHeight > el.clientHeight && el.scrollTop > 0) el.scrollTo(0, 0);
                         });
 
-                        const currentScrollHeight = document.documentElement.scrollHeight;
-                        if (currentScrollHeight === previousScrollHeight) {
-                            if (++sameTopCount >= 3) {
+                        // 높이 대신 말풍선의 실제 갯수를 검사
+                        const currentBubbleCount = currentBubbles.length;
+                        if (currentBubbleCount === previousBubbleCount) {
+                            if (++sameBubbleCount >= 4) { // 대기 시간을 약간 늘림 (약 6초)
                                 clearInterval(searchInterval);
                                 window.isNavSearching = false;
                                 compass.textContent = "❌ Location not found (might be a new chat)";
@@ -946,9 +974,9 @@ async function initSmartNavigator() {
                                 return;
                             }
                         } else {
-                            sameTopCount = 0;
+                            sameBubbleCount = 0; // 새 말풍선이 로딩되었으면 카운트 초기화
                         }
-                        previousScrollHeight = currentScrollHeight;
+                        previousBubbleCount = currentBubbleCount;
                     }
                 }, 1500);
             };
