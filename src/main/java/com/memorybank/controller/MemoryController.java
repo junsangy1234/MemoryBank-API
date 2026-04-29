@@ -32,7 +32,7 @@ public class MemoryController {
         Member member = memberService.findByApiKey(apiKey);
         List<Long> memoryId = memoryService.saveMemory(member.getId(), request.getWorkspaceId(), request.getContent(), request.getType());
 
-        return new SaveMemoryResponse(memoryId, "기억이 성공적으로 저장 되었습니다.");
+        return new SaveMemoryResponse(memoryId, "Memory saved successfully.");
     }
 
     @GetMapping("/list")
@@ -80,14 +80,14 @@ public class MemoryController {
 
         //Lite등급 이상인지 확인
         if(member.getRole() == Role.FREE && !member.isHasStarterPack()){
-            throw new IllegalStateException("전체 저장 기능은 스타터팩 구매 또는 LITE 등급 이상부터 사용 가능합니다.");
+            throw new IllegalStateException("The full scan feature is only available for Starter Pack owners or LITE tier and above.");
         }
 
         //임시 저장
         Long savedJobId = memoryService.initiateFullSave(member.getId(), request);
         memoryService.processFullSave(savedJobId);
 
-        return ResponseEntity.ok("전체 대화 수집 완료. (임시 ID: " + savedJobId + ")");
+        return ResponseEntity.ok("Full conversation collected. (Temp ID: " + savedJobId + ")");
     }
 
     @GetMapping("/full-save/{jobId}/status")

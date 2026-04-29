@@ -1,4 +1,4 @@
-console.log("🚀 AI Memory Bank Load (V44: 인페이지 모달 스캔 현황 UI 및 모던 디자인 적용)");
+console.log("🚀 AI Memory Bank Loaded");
 
 // =========================================================
 // 1. 스타일 주입
@@ -22,15 +22,17 @@ document.head.appendChild(style);
 // =========================================================
 // 2. 상수 및 전역 상태
 // =========================================================
-const CREDIT_COST = { SEARCH: 1, SYNC: 1, SAVE: 1 };
+const CREDIT_COST = { SEARCH: 1, SYNC: 2, SAVE: 3 };
 const API_BASE = "https://aimemorybank.cloud/api";
 
 const siteConfig = {
-    "chatgpt.com": '[data-message-author-role]',
+    "chatgpt.com": 'article[data-testid^="conversation-turn"], [data-message-author-role]',
     "gemini.google.com": 'user-query, model-response',
-    "claude.ai": '.font-user-message, .font-claude-message',
-    "grok.com": '.prose, .message-row, [data-testid="message-content"]',
-    "chat.deepseek.com": '.ds-markdown, .fbb737a4, .text-message'
+    "claude.ai": '.font-user-message, .font-claude-message, [data-testid="user-message"], [data-testid="assistant-message"]',
+    "grok.com": '.message-row, [data-testid="message-content"], .prose',
+    "chat.deepseek.com": '.ds-markdown, .text-message',
+    "perplexity.ai": '.prose, [dir="auto"]',
+    "poe.com": '[class*="Message_botMessage"], [class*="Message_humanMessage"]'
 };
 
 chrome.storage.local.set({ isSavingInProgress: false });
@@ -93,11 +95,11 @@ function getAuthInfo() {
 }
 
 function showLoginPrompt() {
-    alert("Memory Bank 익스텐션 팝업을 열어 먼저 로그인해주세요!");
+    alert("Please open the Memory Bank extension popup to log in first!");
 }
 
 function showPaywallModal(actionType) {
-    const msg = `⚡ 충전된 번개가 모두 소진되었습니다! (요청 작업: ${actionType})\n\n흐름이 끊기셨나요? LITE 요금제로 업그레이드하고 매일 100개의 번개를 받아보세요!\n\n[확인]을 누르시면 안전한 결제 페이지로 즉시 이동합니다.`;
+    const msg = `⚡ All charged credits have been exhausted! (Action: ${actionType})\n\nNeed more? Upgrade to the LITE plan and get 100 credits daily!\n\nClick [OK] to securely proceed to the checkout page.`;
 
     if (confirm(msg)) {
         getAuthInfo().then(auth => {
@@ -105,7 +107,7 @@ function showPaywallModal(actionType) {
                 const checkoutUrl = `https://memory-bank.lemonsqueezy.com/checkout/buy/48419913-7c97-4859-b3b6-50438e33db61?checkout[custom][user_email]=${encodeURIComponent(auth.userEmail)}&checkout[email]=${encodeURIComponent(auth.userEmail)}`;
                 window.open(checkoutUrl, '_blank');
             } else {
-                alert("팝업을 열어 먼저 로그인해주세요!");
+                alert("Please open the extension popup to log in first!");
             }
         });
     }
@@ -114,8 +116,8 @@ function showPaywallModal(actionType) {
 function insertTextAndTrigger(target, text) {
     target.focus();
     if (target.isContentEditable) {
-        target.innerText = text;
-        target.dispatchEvent(new Event('input', { bubbles: true }));
+        target.innerText = '';
+        document.execCommand('insertText', false, text);
     } else {
         const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
         if (nativeSetter) {
@@ -124,8 +126,11 @@ function insertTextAndTrigger(target, text) {
             target.value = text;
         }
         target.dispatchEvent(new Event('input', { bubbles: true }));
+        target.dispatchEvent(new Event('change', { bubbles: true }));
     }
-    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', which: 13, keyCode: 13, bubbles: true }));
+    setTimeout(() => {
+        target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', which: 13, keyCode: 13, bubbles: true }));
+    }, 100);
 }
 
 // =========================================================
@@ -188,9 +193,9 @@ function showFullScanLockdown(textLength) {
     const overlay = getOrCreateEl('mb-fullscan-lockdown');
     overlay.innerHTML = `
         <div style="font-size:60px;animation:mb-spin 2s linear infinite;margin-bottom:20px;">⏳</div>
-        <h2 style="margin:0 0 10px 0; font-family: sans-serif;">전체 대화 스캔 중...</h2>
-        <p style="font-size:16px;font-weight:bold;color:#60a5fa; font-family: sans-serif;">데이터 로딩을 위해 창을 닫거나 스크롤을 만지지 마세요.</p>
-        <p style="margin-top:10px;color:#9ca3af; font-family: sans-serif;">현재 수집량: ${textLength.toLocaleString()} 자</p>
+        <h2 style="margin:0 0 10px 0; font-family: sans-serif;">Scanning Full Conversation...</h2>
+        <p style="font-size:16px;font-weight:bold;color:#60a5fa; font-family: sans-serif;">Please do not close the window or scroll during data loading.</p>
+        <p style="margin-top:10px;color:#9ca3af; font-family: sans-serif;">Collected characters: ${textLength.toLocaleString()} chars</p>
     `;
 }
 
@@ -199,7 +204,7 @@ function hideFullScanLockdown() {
 }
 
 // =========================================================
-// 6. 전체 저장 모달 & 🌟 인페이지(In-page) 프로그레스 팝업 전환
+// 6. 전체 저장 모달
 // =========================================================
 function showFullScanConfirmModal(scanData, auth, unifiedFlagKey, unlockCallback) {
     const overlay = document.createElement('div');
@@ -216,24 +221,23 @@ function showFullScanConfirmModal(scanData, auth, unifiedFlagKey, unlockCallback
         textAlign: 'center', width: '360px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)'
     });
 
-    // 모던 컨펌 UI
     box.innerHTML = `
         <div style="font-size:48px;margin-bottom:12px;">📋</div>
-        <h3 style="margin:0 0 16px 0; color:#111827; font-size: 20px; font-weight: 700;">스캔 완료!</h3>
+        <h3 style="margin:0 0 16px 0; color:#111827; font-size: 20px; font-weight: 700;">Scan Complete!</h3>
         <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:24px;text-align:left;font-size:14px;color:#374151;">
             <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
-                <span style="color:#6b7280;font-weight:600;">수집된 텍스트:</span>
-                <strong style="color:#111827;">${scanData.textLength.toLocaleString()} 자</strong>
+                <span style="color:#6b7280;font-weight:600;">Collected Text:</span>
+                <strong style="color:#111827;">${scanData.textLength.toLocaleString()} chars</strong>
             </div>
             <div style="display:flex;justify-content:space-between;">
-                <span style="color:#6b7280;font-weight:600;">예상 번개 소모:</span>
+                <span style="color:#6b7280;font-weight:600;">Estimated Credits:</span>
                 <strong style="color:#2563eb;font-size:15px;">${scanData.estimatedCredits} ⚡</strong>
             </div>
         </div>
-        <p style="color:#9ca3af;font-size:12px;margin-bottom:24px;line-height:1.4;">확정 시 화면 중앙에 진행률이 표시되며<br>백그라운드에서 안전하게 저장됩니다.</p>
+        <p style="color:#9ca3af;font-size:12px;margin-bottom:24px;line-height:1.4;">Upon confirmation, progress will be shown in the center,<br>and it will be safely saved in the background.</p>
         <div style="display:flex;gap:12px;">
-            <button id="mb-scan-cancel" style="flex:1;background:#f3f4f6;color:#374151;border:none;padding:14px;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer;transition:background 0.2s;">취소</button>
-            <button id="mb-scan-confirm" style="flex:1;background:#3b82f6;color:white;border:none;padding:14px;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer;box-shadow:0 4px 6px -1px rgba(59,130,246,0.3);transition:background 0.2s;">저장 확정</button>
+            <button id="mb-scan-cancel" style="flex:1;background:#f3f4f6;color:#374151;border:none;padding:14px;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer;transition:background 0.2s;">Cancel</button>
+            <button id="mb-scan-confirm" style="flex:1;background:#3b82f6;color:white;border:none;padding:14px;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer;box-shadow:0 4px 6px -1px rgba(59,130,246,0.3);transition:background 0.2s;">Confirm Save</button>
         </div>
     `;
     overlay.appendChild(box);
@@ -246,10 +250,9 @@ function showFullScanConfirmModal(scanData, auth, unifiedFlagKey, unlockCallback
 
     document.getElementById('mb-scan-cancel').onclick = () => { overlay.remove(); unlockCallback(); };
 
-
     document.getElementById('mb-scan-confirm').onclick = async () => {
         const confirmBtn = document.getElementById('mb-scan-confirm');
-        confirmBtn.textContent = "⏳ 서버 접수 중...";
+        confirmBtn.textContent = "⏳ Submitting to server...";
         confirmBtn.disabled = true;
 
         try {
@@ -259,45 +262,44 @@ function showFullScanConfirmModal(scanData, auth, unifiedFlagKey, unlockCallback
                 body: JSON.stringify({
                     workspaceId: auth.workspaceId,
                     rawContent: scanData.rawText,
-                    estimatedTokens: scanData.estimatedCredits
+                    estimatedTokens: scanData.estimatedCredits,
+                    estimatedCredits: scanData.estimatedCredits
                 })
             });
 
             if (initRes.status === 402) {
-                overlay.remove(); showPaywallModal(`전체 저장(${scanData.estimatedCredits}개 차감)`); unlockCallback(); return;
+                overlay.remove(); showPaywallModal(`Full Scan(${scanData.estimatedCredits}⚡)`); unlockCallback(); return;
             }
-            if (!initRes.ok) throw new Error("접수 실패");
+            if (!initRes.ok) throw new Error("Submission Failed");
+
+            deductLocalCredit(auth, scanData.estimatedCredits, "🚀 Full Scan");
 
             const responseText = await initRes.text();
             const match = responseText.match(/ID: (\d+)/);
-            if (!match) throw new Error("Job ID 파싱 실패");
+            if (!match) throw new Error("Failed to parse Job ID");
 
             const jobId = match[1];
 
-            // 🌟 [수정 포인트] startTime을 기록하여 팝업이 늦게 열려도 시간 보정 가능하게 함
             chrome.storage.local.set({
                 activeMbJob: { jobId, flagKey: unifiedFlagKey, newFlag: scanData.newFlag, estimatedCredits: scanData.estimatedCredits, startTime: Date.now() }
             });
 
-            // 🌟 [수정 포인트] 인페이지 모달 생성 안 함! 바로 닫고 화면 잠금 해제!
             overlay.remove();
             unlockCallback();
 
-            // 안내 팝업창 (확인 누르면 바로 다른 웹서핑 가능)
-            alert("🚀 대용량 저장이 시작되었습니다!\n\n현재 페이지에서 다른 작업을 계속하셔도 됩니다. 진행 상황은 우측 상단의 익스텐션 팝업(🧠)에서 확인하세요.");
+            alert("🚀 Bulk save started!\n\nYou can continue working on this page. Check the progress in the extension popup (🧠).");
 
-            // 조용히 백그라운드 폴링만 시작
             startJobPolling(jobId, auth, scanData.estimatedCredits, unifiedFlagKey, scanData.newFlag);
 
         } catch (error) {
-            alert("🚨 오류 발생: " + error.message);
+            alert("🚨 Error occurred: " + error.message);
             overlay.remove(); unlockCallback();
         }
     };
 }
 
 // =========================================================
-// 7. 폴링: 백그라운드 태스크 (UI 간섭 없음)
+// 7. 폴링: 백그라운드 태스크
 // =========================================================
 function startJobPolling(jobId, auth, estimatedCredits, flagKey, newFlag) {
     const pollInterval = setInterval(async () => {
@@ -311,19 +313,17 @@ function startJobPolling(jobId, auth, estimatedCredits, flagKey, newFlag) {
 
             if (data.status === "COMPLETED") {
                 clearInterval(pollInterval);
-                deductLocalCredit(auth, estimatedCredits, "🚀 전체 스캔");
+
                 localStorage.setItem(flagKey, newFlag);
                 chrome.storage.local.remove(['activeMbJob']);
 
-                // 완료 시점에만 알림!
-                alert("✅ 전체 대화 백그라운드 저장이 완벽하게 완료되었습니다!");
+                alert("✅ Full conversation background save successfully completed!");
             } else if (data.status === "FAILED") {
                 clearInterval(pollInterval);
                 chrome.storage.local.remove(['activeMbJob']);
-                alert("🚨 백그라운드 저장 처리 중 서버 에러가 발생했습니다.");
+                alert("🚨 Server error occurred during background save.");
             }
         } catch {
-            // 네트워크 오류 시 무시하고 계속 폴링
         }
     }, 2000);
 }
@@ -378,9 +378,9 @@ function injectFloatingMenu() {
         btn.onmouseleave = () => showCost(false);
     };
 
-    const saveBtn = document.createElement('button'); setupSubButton(saveBtn, '💾 단일 저장', `${CREDIT_COST.SAVE}⚡`);
-    const loadBtn = document.createElement('button'); setupSubButton(loadBtn, '📥 기억 연동', `${CREDIT_COST.SYNC}⚡`);
-    const scanBtn = document.createElement('button'); setupSubButton(scanBtn, '🚀 전체 스캔', `1만자당 1⚡`);
+    const saveBtn = document.createElement('button'); setupSubButton(saveBtn, '💾 Save Snippet', `${CREDIT_COST.SAVE}⚡`);
+    const loadBtn = document.createElement('button'); setupSubButton(loadBtn, '📥 Sync Memory', `${CREDIT_COST.SYNC}⚡`);
+    const scanBtn = document.createElement('button'); setupSubButton(scanBtn, '🚀 Full Scan', `1⚡/10k chars`);
 
     const subBtns = [saveBtn, loadBtn, scanBtn];
 
@@ -407,7 +407,10 @@ function injectFloatingMenu() {
 
         getAuthInfo().then(auth => {
             const textSpan = scanBtn.querySelector('.mb-btn-text');
-            if (textSpan) textSpan.textContent = auth.userRole === 'FREE' ? '🔒 전체 스캔' : '✨ 전체 스캔';
+            if (textSpan) {
+                const isLocked = auth.userRole === 'FREE' && !auth.hasStarterPack;
+                textSpan.textContent = isLocked ? '🔒 Full Scan' : '✨ Full Scan';
+            }
         });
     };
 
@@ -430,10 +433,10 @@ function injectFloatingMenu() {
         try {
             const auth = await getAuthInfo();
             if (!auth.apiKey || !auth.workspaceId) { showLoginPrompt(); return; }
-            if (auth.userRole === 'FREE' && !auth.hasStarterPack) { alert("🔒 전체 대화 스캔 기능은 LITE 등급 이상부터 사용 가능합니다."); return; }
+            if (auth.userRole === 'FREE' && !auth.hasStarterPack) { alert("🔒 Full conversation scan is available for LITE tier and above."); return; }
 
             const currentPlatform = getCurrentPlatform();
-            if (!currentPlatform) { alert("❌ 지원하지 않는 플랫폼입니다."); return; }
+            if (!currentPlatform) { alert("❌ Unsupported platform."); return; }
 
             setBusyState(true);
 
@@ -500,10 +503,10 @@ function injectFloatingMenu() {
             let rawFinalText = collectedChunks.join('\n\n');
             let textLength = rawFinalText.length;
 
-            if (textLength < 10) { alert("⚠️ 새로 스캔할 대화 내용이 없습니다."); setBusyState(false); return; }
+            if (textLength < 10) { alert("⚠️ No new conversation to scan."); setBusyState(false); return; }
 
             if (textLength > 4000000) {
-                alert(`⚠️ 대화가 너무 방대합니다! (${textLength.toLocaleString()}자)\n\n브라우저 메모리 보호를 위해 최신 대화 400만 자까지만 스캔을 진행합니다.`);
+                alert(`⚠️ Conversation is too large! (${textLength.toLocaleString()} chars)\n\nScanning up to 4 million recent characters to protect browser memory.`);
                 rawFinalText = rawFinalText.slice(-4000000);
                 textLength = 4000000;
             }
@@ -527,7 +530,7 @@ function injectFloatingMenu() {
         } catch (error) {
             hideFullScanLockdown();
             setBusyState(false);
-            alert("🚨 스캔 중 오류 발생: " + error.message);
+            alert("🚨 Error occurred during scan: " + error.message);
         }
     };
 
@@ -541,10 +544,10 @@ function injectFloatingMenu() {
             if (!auth.apiKey || !auth.workspaceId) { showLoginPrompt(); return; }
 
             const currentPlatform = getCurrentPlatform();
-            if (!currentPlatform) { alert("❌ 지원하지 않는 플랫폼입니다."); return; }
+            if (!currentPlatform) { alert("❌ Unsupported platform."); return; }
 
             const allBubbles = document.querySelectorAll(siteConfig[currentPlatform]);
-            if (allBubbles.length === 0) { alert("❌ 저장할 대화 내용을 찾을 수 없습니다."); return; }
+            if (allBubbles.length === 0) { alert("❌ No conversation found to save."); return; }
 
             const flagKey = getFlagKey(auth);
             const flagText = localStorage.getItem(flagKey);
@@ -562,7 +565,7 @@ function injectFloatingMenu() {
             }
 
             const newBubbles = Array.from(allBubbles).slice(startIndex);
-            if (newBubbles.length === 0) { alert("✅ 최근 대화가 이미 완벽하게 저장되어 있습니다."); return; }
+            if (newBubbles.length === 0) { alert("✅ Recent conversations are already perfectly saved."); return; }
 
             const cleanedBubbles = [];
             let currentLength = 0;
@@ -578,8 +581,7 @@ function injectFloatingMenu() {
 
                 if (currentLength + text.length > 10000) {
                     if (cleanedBubbles.length === 0) {
-                        // 맨 처음 담으려는 답변 하나가 10000자 넘을 경우, 튕겨내지 않고 잘라서 넣음
-                        cleanedBubbles.unshift(text.substring(0, 10000) + "\n\n...[내용이 너무 길어 생략됨]");
+                        cleanedBubbles.unshift(text.substring(0, 10000) + "\n\n...[Content too long, truncated]");
                     }
                     isTruncated = true;
                     break;
@@ -591,14 +593,14 @@ function injectFloatingMenu() {
             }
 
             if (cleanedBubbles.length === 0) {
-                alert("⚠️ 새로 저장할 일반 텍스트 대화가 없습니다. (시스템 명령만 존재)");
+                alert("⚠️ No new plain text conversation to save. (Only system prompts exist)");
                 setBusyState(false);
                 return;
             }
 
             if (isTruncated) {
                 const proceed = confirm(
-                    `⚠️ 한 번에 저장하기엔 텍스트가 너무 길어 단일 저장 한도(10,000자)에 맞춰 최근 내용만 저장됩니다.\n\n(끊김 없이 모두 저장하려면 '🚀 전체 스캔'을 이용해 주세요.)\n이대로 진행하시겠습니까?`
+                    `⚠️ The text is too long for a single save. Only recent content up to the limit (10,000 chars) will be saved.\n\n(Use '🚀 Full Scan' to save everything seamlessly.)\nProceed?`
                 );
                 if (!proceed) { setBusyState(false); return; }
             }
@@ -611,10 +613,10 @@ function injectFloatingMenu() {
                 body: JSON.stringify({ workspaceId: auth.workspaceId, content: cleanedBubbles.join('\n\n'), type: "FULL_CONV" })
             });
 
-            if (response.status === 402) { showPaywallModal(`단일저장(${CREDIT_COST.SAVE}⚡)`); throw new Error("INSUFFICIENT_CREDITS"); }
-            if (!response.ok) throw new Error("서버 통신 에러가 발생했습니다.");
+            if (response.status === 402) { showPaywallModal(`Save Snippet(${CREDIT_COST.SAVE}⚡)`); throw new Error("INSUFFICIENT_CREDITS"); }
+            if (!response.ok) throw new Error("Server communication error occurred.");
 
-            deductLocalCredit(auth, CREDIT_COST.SAVE,"💾 단일 저장");
+            deductLocalCredit(auth, CREDIT_COST.SAVE,"💾 Save Snippet");
 
             for (let i = newBubbles.length - 1; i >= 0; i--) {
                 let rawText = newBubbles[i].innerText;
@@ -628,11 +630,11 @@ function injectFloatingMenu() {
             }
 
             showTokenDeduction(saveBtn, CREDIT_COST.SAVE);
-            setTimeout(() => { alert("✅ 최신 대화가 성공적으로 저장되었습니다!"); setBusyState(false); }, 300);
+            setTimeout(() => { alert("✅ Latest conversation saved successfully!"); setBusyState(false); }, 300);
 
         } catch (error) {
             setBusyState(false);
-            if (error.message !== "INSUFFICIENT_CREDITS") alert("🚨 단일 저장 실패: " + error.message);
+            if (error.message !== "INSUFFICIENT_CREDITS") alert("🚨 Save Snippet Failed: " + error.message);
         }
     };
 
@@ -656,37 +658,37 @@ function injectFloatingMenu() {
                 { method: 'GET', headers: { "Content-Type": "application/json", "X-API-KEY": auth.apiKey } }
             );
 
-            if (response.status === 402) { showPaywallModal(`기억연동(${CREDIT_COST.SYNC}⚡)`); throw new Error("INSUFFICIENT_CREDITS"); }
-            if (!response.ok) throw new Error("서버 에러");
+            if (response.status === 402) { showPaywallModal(`Sync Memory(${CREDIT_COST.SYNC}⚡)`); throw new Error("INSUFFICIENT_CREDITS"); }
+            if (!response.ok) throw new Error("Server Error");
 
             const result = await response.json();
             const memories = result.data || [];
 
             if (memories.length === 0) {
-                alert("✅ 모든 최신 기억이 이미 동기화되어 있습니다.");
+                alert("✅ All latest memories are already synced.");
                 setBusyState(false);
                 return;
             }
 
-            deductLocalCredit(auth, CREDIT_COST.SYNC, "📥 기억 연동");
+            deductLocalCredit(auth, CREDIT_COST.SYNC, "📥 Sync Memory");
 
             const newLastId = memories[memories.length - 1].id;
             const memoryContents = memories.map((m, i) => `${i + 1}. ${m.content}`).join('\n');
             const cleanSyncPrompt = `[System Instruction: Memorize the following data and reply strictly with "Yes, I have updated my memory."]\n\n[Loaded Memory Chunk]\n${memoryContents}`.trim();
 
-            const inputTarget = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]');
+            const inputTarget = document.querySelector('textarea:not([hidden]):not([style*="display: none"]), [contenteditable="true"]:not([hidden]):not([style*="display: none"])');
             if (inputTarget) {
                 insertTextAndTrigger(inputTarget, cleanSyncPrompt);
                 localStorage.setItem(syncStorageKey, newLastId);
                 showTokenDeduction(loadBtn, CREDIT_COST.SYNC);
-                setTimeout(() => { alert("✅ 동기화 완료"); setBusyState(false); }, 1000);
+                setTimeout(() => { alert("✅ Sync Complete"); setBusyState(false); }, 1000);
             } else {
                 setBusyState(false);
-                alert("채팅 입력창을 찾을 수 없습니다.");
+                alert("Chat input box not found.");
             }
         } catch (e) {
             setBusyState(false);
-            if (e.message !== "INSUFFICIENT_CREDITS") alert("🚨 기억 연동 실패");
+            if (e.message !== "INSUFFICIENT_CREDITS") alert("🚨 Memory Sync Failed");
         }
     };
 
@@ -701,7 +703,7 @@ fabObserver.observe(document.body, { childList: true, subtree: false });
 injectFloatingMenu();
 
 // =========================================================
-// 9. /m 인라인 검색 커맨드
+// 9. /m 인라인 검색 커맨드 (엔터 & 마우스 클릭 완벽 대응)
 // =========================================================
 function initSlashCommandListener() {
     document.addEventListener('input', (e) => {
@@ -711,36 +713,30 @@ function initSlashCommandListener() {
         target.classList.toggle('mb-slash-mode', text.startsWith('/m '));
     });
 
-    document.addEventListener('keydown', async (e) => {
-        const target = e.target;
-        if ((target.tagName !== 'TEXTAREA' && !target.isContentEditable && target.tagName !== 'INPUT') ||
-            e.key !== 'Enter' || e.shiftKey) return;
+    async function executeInlineSearch(target, text, originalEvent) {
+        if (!text.startsWith('/m ')) return false;
 
-        const text = target.value !== undefined ? target.value : target.innerText;
-        if (!text.startsWith('/m ')) return;
+        if (originalEvent) {
+            originalEvent.preventDefault();
+            originalEvent.stopPropagation();
+            originalEvent.stopImmediatePropagation();
+        }
 
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (target.dataset.mbSearching === "true") return;
+        if (target.dataset.mbSearching === "true") return true;
 
         const query = text.substring(3).trim();
-        if (!query) { alert("검색할 질문을 입력해주세요. (예: /m 내가 좋아하는 음식은?)"); return; }
+        if (!query) { alert("Please enter a question to search. (e.g., /m What is my favorite food?)"); return true; }
 
         target.dataset.mbSearching = "true";
 
         const rect = target.getBoundingClientRect();
         const blocker = document.createElement('div');
         blocker.id = 'mb-input-blocker';
-        blocker.textContent = '⏳ Memory Bank AI 검색 중...';
+        blocker.textContent = '⏳ Memory Bank AI Searching...';
         blocker.className = 'mb-input-blocker';
         Object.assign(blocker.style, {
-            position: 'absolute',
-            top: `${rect.top + window.scrollY}px`,
-            left: `${rect.left + window.scrollX}px`,
-            width: `${rect.width}px`,
-            height: `${rect.height}px`,
-            borderRadius: window.getComputedStyle(target).borderRadius
+            position: 'absolute', top: `${rect.top + window.scrollY}px`, left: `${rect.left + window.scrollX}px`,
+            width: `${rect.width}px`, height: `${rect.height}px`, borderRadius: window.getComputedStyle(target).borderRadius
         });
         document.body.appendChild(blocker);
 
@@ -755,7 +751,7 @@ function initSlashCommandListener() {
                 { method: 'GET', headers: { "X-API-KEY": auth.apiKey } }
             );
 
-            if (response.status === 402) { showPaywallModal(`검색(1⚡)`); throw new Error("NO_CREDIT"); }
+            if (response.status === 402) { showPaywallModal(`Search(${CREDIT_COST.SEARCH}⚡)`); throw new Error("NO_CREDIT"); }
             if (!response.ok) throw new Error("SEARCH_FAILED");
 
             const responseData = await response.json();
@@ -771,7 +767,7 @@ function initSlashCommandListener() {
             target.dataset.mbSearching = "false";
             target.classList.remove('mb-slash-mode');
 
-            deductLocalCredit(auth, CREDIT_COST.SEARCH, "🔍 AI 기억 검색");
+            deductLocalCredit(auth, CREDIT_COST.SEARCH, "🔍 AI Memory Search");
             showTokenDeduction(target, CREDIT_COST.SEARCH);
 
             insertTextAndTrigger(target, finalPrompt);
@@ -779,16 +775,36 @@ function initSlashCommandListener() {
         } catch (error) {
             removeBlocker();
             target.dataset.mbSearching = "false";
-            if (error.message !== "NO_CREDIT" && error.message !== "NO_AUTH") {
-                alert("🚨 검색 중 오류가 발생했습니다.");
-            }
+            if (error.message !== "NO_CREDIT" && error.message !== "NO_AUTH") alert("🚨 Error occurred during search.");
+        }
+        return true;
+    }
+
+    document.addEventListener('keydown', (e) => {
+        const target = e.target;
+        if ((target.tagName !== 'TEXTAREA' && !target.isContentEditable && target.tagName !== 'INPUT') || e.key !== 'Enter' || e.shiftKey) return;
+
+        const text = target.value !== undefined ? target.value : target.innerText;
+        executeInlineSearch(target, text, e);
+    }, true);
+
+    document.addEventListener('click', (e) => {
+        const sendBtn = e.target.closest('button[data-testid="send-button"], button[aria-label*="Send"], button[title*="Send"], .send-button');
+        if (!sendBtn) return;
+
+        const target = document.querySelector('textarea:not([hidden]):not([style*="display: none"]), [contenteditable="true"]:not([hidden]):not([style*="display: none"])');
+        if (!target) return;
+
+        const text = target.value !== undefined ? target.value : target.innerText;
+        if (text.startsWith('/m ')) {
+            executeInlineSearch(target, text, e);
         }
     }, true);
 }
 setTimeout(initSlashCommandListener, 2000);
 
 // =========================================================
-// 10. 스마트 나침반 (🌟 모던 테마 및 깃발 클린업 적용)
+// 10. 스마트 나침반
 // =========================================================
 let isNavigatorInitialized = false;
 
@@ -827,7 +843,6 @@ async function initSmartNavigator() {
         const flagKey = getFlagKey(auth);
         const targetText = localStorage.getItem(flagKey);
 
-        // 🌟 저장 지점이 없으면 화면의 깃발 싹 다 지우기 (워크스페이스 변경 시)
         if (!targetText || normalizeForMatch(targetText).slice(-60).length < 5) {
             compass.style.display = 'none';
             document.querySelectorAll('[data-mb-flagged="true"]').forEach(el => {
@@ -878,7 +893,7 @@ async function initSmartNavigator() {
             });
 
             const badge = document.createElement('div');
-            badge.textContent = "💾 마지막 저장 지점";
+            badge.textContent = "💾 Last Saved Point";
             Object.assign(badge.style, {
                 position: 'absolute', top: '-12px', right: '10px', backgroundColor: '#3b82f6',
                 color: 'white', padding: '4px 14px', borderRadius: '15px', fontSize: '11px',
@@ -889,13 +904,13 @@ async function initSmartNavigator() {
         }
 
         if (!targetBubble) {
-            if (!window.isNavSearching) compass.textContent = "⬆️ 저장 위치 (클릭하여 찾기)";
+            if (!window.isNavSearching) compass.textContent = "⬆️ Saved Point (Click to find)";
             compass.style.display = 'flex';
 
             compass.onclick = () => {
                 if (window.isNavSearching) return;
                 window.isNavSearching = true;
-                compass.textContent = "⏳ 위치 찾는 중...";
+                compass.textContent = "⏳ Finding location...";
 
                 let sameTopCount = 0;
                 let previousScrollHeight = document.documentElement.scrollHeight;
@@ -926,7 +941,7 @@ async function initSmartNavigator() {
                             if (++sameTopCount >= 3) {
                                 clearInterval(searchInterval);
                                 window.isNavSearching = false;
-                                compass.textContent = "❌ 위치를 찾을 수 없음 (새 대화일 수 있습니다)";
+                                compass.textContent = "❌ Location not found (might be a new chat)";
                                 setTimeout(() => track(), 3000);
                                 return;
                             }
@@ -943,9 +958,9 @@ async function initSmartNavigator() {
             const moveToTarget = () => targetBubble.scrollIntoView({ behavior: 'smooth', block: 'end' });
 
             if (rect.bottom < 0) {
-                compass.textContent = "⬆️ 마지막 저장 위치"; compass.style.display = 'flex'; compass.onclick = moveToTarget;
+                compass.textContent = "⬆️ Last Saved Point"; compass.style.display = 'flex'; compass.onclick = moveToTarget;
             } else if (rect.top > window.innerHeight) {
-                compass.textContent = "⬇️ 마지막 저장 위치"; compass.style.display = 'flex'; compass.onclick = moveToTarget;
+                compass.textContent = "⬇️ Last Saved Point"; compass.style.display = 'flex'; compass.onclick = moveToTarget;
             } else {
                 compass.style.display = 'none';
             }
@@ -965,7 +980,6 @@ async function checkPendingJobs() {
         const auth = await getAuthInfo();
         if (!auth.apiKey) return;
 
-        // 파라미터 간소화 (UI 모달 넘기지 않음)
         startJobPolling(activeMbJob.jobId, auth, activeMbJob.estimatedCredits, activeMbJob.flagKey, activeMbJob.newFlag);
     });
 }

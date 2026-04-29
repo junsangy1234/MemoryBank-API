@@ -42,11 +42,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Service
-// 🌟 클래스 레벨의 @Transactional 제거 유지! (DB 파이프 낭비 원천 차단)
 @RequiredArgsConstructor
 public class MemoryService {
 
-    // 🌟 [핵심 픽스 1] 자기 자신을 Lazy하게 주입받아 내부 호출 시에도 프록시(문지기)를 거치게 만듭니다.
     @Autowired
     @Lazy
     private MemoryService self;
@@ -71,7 +69,7 @@ public class MemoryService {
             member.addRewardCredits(job.getEstimatedCredits());
             memberRepository.save(member);
 
-            log.warn("🧹 좀비 작업 정리 완료. Job ID: {}, 크레딧 환불 완료", job.getId());
+            log.warn("🧹 Zombie job cleaned up. Job ID: {}, Credits refunded.", job.getId());
         }
     }
 
@@ -101,20 +99,18 @@ public class MemoryService {
     // =====================================================================
     public List<Long> saveMemory(Long memberId, Long workspaceId, String content, String type) {
         if (content != null && content.length() > MAX_SINGLE_SAVE_CHARS) {
-            throw new IllegalArgumentException("단일 저장 허용 범위를 초과했습니다. 전체 스캔 기능을 이용해주세요.");
+            throw new IllegalArgumentException("Single save limit exceeded. Please use the full scan feature.");
         }
 
         Workspace workspace = workspaceService.findByIdWithMember(workspaceId);
-        if (!workspace.getMember().getId().equals(memberId)) throw new IllegalStateException("권한 없음");
+        if (!workspace.getMember().getId().equals(memberId)) throw new IllegalStateException("Unauthorized access");
 
-        // 🌟 [핵심 픽스 2] self를 통해 호출하여 새로운 트랜잭션을 강제로 엽니다!
-        self.deductCredit(memberId, 1); // CreditPolicy 상수가 없어서 임시로 1 할당 (원래코드 맞춤)
+        self.deductCredit(memberId, CreditPolicy.SAVE_COST);
 
         List<Long> saveIds = new ArrayList<>();
 
         if (content.length() <= 300 && !content.contains("```")) {
             float[] vector = embeddingModel.embed(content);
-            // 🌟 self를 통해 호출
             saveIds.add(self.saveRawMemoryToDb(workspace, content, vector));
             return saveIds;
         }
@@ -133,10 +129,13 @@ public class MemoryService {
     @Transactional
     public Long initiateFullSave(Long memberId, FullSaveRequest request){
         Workspace workspace = workspaceService.findByIdWithMember(request.workspaceId());
-        if(!workspace.getMember().getId().equals(memberId)) throw new IllegalStateException("권한 없음");
+        if(!workspace.getMember().getId().equals(memberId)) throw new IllegalStateException("Unauthorized access");
 
         MemorySyncJob pendingJob = MemorySyncJob.createPendingJob(workspace, request.rawContent(), request.estimatedCredits());
         memorySyncJobRepository.save(pendingJob);
+
+        self.deductCredit(memberId, request.estimatedCredits());
+
         return pendingJob.getId();
     }
 
@@ -149,12 +148,8 @@ public class MemoryService {
         Long memberId = workspace.getMember().getId();
 
         try {
-            // 🌟 self 호출로 변경
-            self.deductCredit(memberId, 0);
-
             List<String> chunks = splitContent(job.getRawContent(), 50000);
 
-            // 🌟 self 호출로 변경
             self.updateJobProgressInDb(jobId, 0, chunks.size());
 
             Semaphore semaphore = getUserSemaphore(memberId);
@@ -168,10 +163,9 @@ public class MemoryService {
                         executeAiExtractionAndSave(workspace, chunkText, "FULL_CONV");
 
                         int currentProcessed = processedCount.incrementAndGet();
-                        // 🌟 self 호출로 변경
                         self.updateJobProgressInDb(jobId, currentProcessed, chunks.size());
                     } catch (Exception e) {
-                        log.error("청크 처리 중 오류", e);
+                        log.error("Error processing chunk", e);
                     } finally {
                         semaphore.release();
                     }
@@ -181,14 +175,12 @@ public class MemoryService {
 
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
-            // 🌟 self 호출로 변경
             self.markJobStatusInDb(jobId, SyncStatus.COMPLETED);
-            log.info("🟢 Job ID {}: 전체 저장 성공!", jobId);
+            log.info("🟢 Job ID {}: Full save successful!", jobId);
 
         } catch (Exception e){
-            // 🌟 self 호출로 변경
             self.markJobStatusInDb(jobId, SyncStatus.FAILED);
-            log.error("🔴 Job ID {}: 전체 저장 실패!", jobId, e);
+            log.error("🔴 Job ID {}: Full save failed!", jobId, e);
         }
     }
 
@@ -198,23 +190,20 @@ public class MemoryService {
     // =====================================================================
     public List<String> searchSimilarMemories(Long memberId, Long workspaceId, String question, int topK, float threshold) {
         Workspace workspace = workspaceService.findByIdWithMember(workspaceId);
-        if (!workspace.getMember().getId().equals(memberId)) throw new IllegalStateException("권한 없음");
+        if (!workspace.getMember().getId().equals(memberId)) throw new IllegalStateException("Unauthorized access");
 
-        // 🌟 self 호출로 변경
         self.deductCredit(memberId, 1);
 
         float[] questionVector = embeddingModel.embed(question);
 
-        // 🌟 self 호출로 변경
         return self.executeSearchInDb(workspaceId, questionVector, topK, threshold);
     }
 
     @Transactional(readOnly = true)
     public SyncResponse getMemoriesForSync(Long memberId, Long workspaceId, Long lastId, int limit) {
         Workspace workspace = workspaceService.findByIdWithMember(workspaceId);
-        if (!workspace.getMember().getId().equals(memberId)) throw new IllegalStateException("권한 없음");
+        if (!workspace.getMember().getId().equals(memberId)) throw new IllegalStateException("Unauthorized access");
 
-        // 🌟 self 호출로 변경
         self.deductCredit(memberId, 1);
 
         List<Memory> memories = memoryRepository.findMemoriesForSync(workspaceId, lastId, limit);
@@ -237,28 +226,28 @@ public class MemoryService {
             targetModel = "gpt-5-nano";
 
             systemInstruction = """
-                            너는 사용자가 웹서핑이나 대화 중 중요하다고 생각하여 직접 드래그해서 스크랩한 텍스트를 정리하는 AI 데이터 아키텍트야.
-                            이 텍스트는 이미 사용자가 필터링한 중요 정보이므로, 원본의 디테일(특히 코드, 명령어, 고유명사, 문제 원인과 해결책)을 절대 훼손하지 마.
+                            You are an AI Data Architect responsible for organizing snippets manually selected and saved by the user from web browsing or conversations.
+                            Since the user has already deemed this text important, NEVER alter or lose any details from the original content (especially codes, commands, proper nouns, problem causes, and solutions).
                             
-                            [분류 기준] (무조건 다음 5가지 중 가장 적합한 하나를 선택하여 요약본 맨 앞에 태그로 기재해)
-                            1. [스크랩-트러블슈팅]: 에러 및 버그 해결 방법, 문제 발생 원인과 대처법.
-                            2. [스크랩-코드/기술]: 프로그래밍 코드 스니펫, 터미널 명령어, IT 아키텍처 및 기술 개념.
-                            3. [스크랩-지식/정보]: 웹서핑 중 발견한 객관적인 팩트, 뉴스 기사, 유용한 팁, 방법론.
-                            4. [스크랩-아이디어/영감]: 벤치마킹할 레퍼런스, 기획 아이디어, 인상 깊은 문구.
-                            5. [스크랩-기타]: 위 카테고리에 속하지 않는 단순 메모, 개인적인 기록.
+                            [Classification Criteria] (You MUST select the ONE most appropriate category from the 5 below and prepend it as a tag at the beginning of the summary)
+                            1. [Snippet-Troubleshooting]: Error and bug resolution methods, causes of problems, and workarounds.
+                            2. [Snippet-Code/Tech]: Programming code snippets, terminal commands, IT architecture, and technical concepts.
+                            3. [Snippet-Knowledge/Info]: Objective facts found during web surfing, news articles, useful tips, and methodologies.
+                            4. [Snippet-Idea/Inspiration]: Benchmarking references, planning ideas, and impressive quotes.
+                            5. [Snippet-Misc]: Simple notes or personal records that do not fit into the above categories.
                             
-                            [지시사항]
-                            1. 텍스트가 너무 길면 핵심 주제별로 1~3개의 조각(summary)으로 나누되, 각 조각은 문맥이 온전히 이어지도록 작성해.
-                            2. 불필요한 인사말, 이모지, 감탄사만 제거하고, 정보의 밀도를 극대화해.
-                            3. 원문에 코드가 있다면 요약본 안에도 반드시 그 코드를 그대로 포함시켜서 문장을 구성해.
-                            4. **[매우 중요: JSON 문법 준수]** summary 문자열 내부에 따옴표(\"), 백슬래시(\\\\\\\\), 또는 \\u 같은 이스케이프 문자를 포함해야 할 경우, 반드시 유효한 JSON 형식에 맞게 이중 이스케이프(\\\\\\\\\\\\\\\\) 처리를 하거나, 오류를 유발할 수 있는 특수 정규식 기호는 일반 텍스트로 풀어써.
-                            5. **[매우 중요: 형식 엄수]** 절대 인사말이나 부연 설명을 덧붙이지 말고, 오직 중괄호 {} 로 시작하고 끝나는 JSON 객체만 출력해.
+                            [Instructions]
+                            1. If the text is too long, break it down into 1 to 3 chunks (summaries) based on key topics, ensuring each chunk maintains full context.
+                            2. Remove unnecessary greetings, emojis, and exclamations, maximizing the density of information.
+                            3. If the original text contains code, you MUST include that code exactly as is within the summary sentence.
+                            4. **[CRITICAL: strict JSON formatting]** If you must include quotes(\"), backslashes(\\\\\\\\), or escape characters like \\u inside the summary string, you MUST properly double-escape them (\\\\\\\\\\\\\\\\) to keep the JSON valid. Do not use regex tokens that could break parsing; write them out as plain text.
+                            5. **[CRITICAL: strict Output]** NEVER output any conversational filler, greetings, or explanations. ONLY output a valid JSON object starting and ending with curly braces {}.
                             
-                            [필수 출력 형식] (반드시 JSON)
+                            [Required Output Format] (MUST be valid JSON)
                             {
                                 "memories": [
-                                    { "summary": "[스크랩-트러블슈팅] Gemini 대화 JSON 파싱 에러 원인과 해결책: ..." },
-                                    { "summary": "[스크랩-코드/기술] 적용된 핵심 자바스크립트 코드: let uniqueLines = [...new Set(textLines)];" }
+                                    { "summary": "[Snippet-Troubleshooting] Cause and solution for Gemini conversation JSON parsing error: ..." },
+                                    { "summary": "[Snippet-Code/Tech] Applied core Javascript code: let uniqueLines = [...new Set(textLines)];" }
                                 ]
                             }
                             """;
@@ -266,29 +255,29 @@ public class MemoryService {
             targetModel = "gpt-5-nano";
 
             systemInstruction = """
-                            너는 대화 기록에서 중요한 문맥과 정보를 추출하여 장기 기억 장소에 저장할 수 있도록 가공하는 AI 데이터 아키텍트야.
-                            제공된 전체 대화를 분석하여, 파편화되지 않은 '독립적이고 완전한 문맥을 가진 정보 덩어리'로 추출해줘.
+                            You are an AI Data Architect tasked with extracting important contexts and information from conversation logs to be saved in long-term memory.
+                            Analyze the provided full conversation and extract it into independent, complete context chunks, ensuring no information is fragmented.
                             
-                            [분류 기준] (무조건 다음 5가지 중 가장 적합한 하나만을 선택)
-                            1. [사용자 정보]: 사용자의 인적 사항, 선호도(취향), 가치관, 관계, 습관 등.
-                            2. [지식]: 객관적인 사실, 방법론, 노하우, 학습 내용, 구체적인 정보 등.
-                            3. [이벤트]: 과거에 일어난 일, 미래의 일정, 기념일 등 시간 중심의 기록등.
-                            4. [프로젝트 및 목표]: 목적을 가진 활동, 업무 진행 상황, 개인적 도전 과제 및 계획.
-                            5. [생각]: 사용자의 주관적인 의견, 아이디어, 영감, 감정, 일기 같은 기록.
+                            [Classification Criteria] (You MUST select the ONE most appropriate category from the 5 below)
+                            1. [User Info]: User's personal details, preferences (tastes), values, relationships, habits, etc.
+                            2. [Knowledge]: Objective facts, methodologies, know-how, learning content, specific information, etc.
+                            3. [Event]: Time-centric records such as past occurrences, future schedules, anniversaries, etc.
+                            4. [Project & Goal]: Purpose-driven activities, work progress, personal challenges, and plans.
+                            5. [Thought]: Subjective opinions, ideas, inspirations, emotions, and diary-like entries.
                             
-                            [지시사항]
-                            1. 1인칭 대명사(나, 내)나 2인칭 대명사(너) 대신 '사용자' 또는 중립적인 명칭을 사용해.
-                            2. 입력된 텍스트의 길이나 주제의 다양성에 따라 필요한 만큼 무제한으로 기억 조각(summary)을 생성해.
-                            3. 각 조각(summary)은 3~5줄짜리 완성된 덩어리로 작성해.
-                            4. 의미 없는 인사말, 감정 표현, 단순 맞장구는 제외해.
-                            5. **[매우 중요: JSON 문법 준수]** summary 문자열 내부에 코드가 포함될 경우 따옴표(\"), 백슬래시(\\\\\\\\), \\u 등을 엄격하게 이스케이프 처리하여 JSON 파싱(ObjectMapper) 시 에러가 나지 않도록 해.
-                            6. **[매우 중요: 형식 엄수]** 절대 인사말이나 부연 설명을 덧붙이지 말고, 오직 중괄호 {} 로 시작하고 끝나는 JSON 객체만 출력해.
+                            [Instructions]
+                            1. Use 'User' or neutral terms instead of first-person pronouns (I, me) or second-person pronouns (you).
+                            2. Generate an unlimited number of memory chunks (summaries) as needed based on the length and topic diversity of the input text.
+                            3. Write each chunk (summary) as a complete, self-contained block of 3 to 5 sentences.
+                            4. Exclude meaningless greetings, emotional expressions, and simple agreements.
+                            5. **[CRITICAL: strict JSON formatting]** If code is included inside the summary string, you MUST strictly escape quotes(\"), backslashes(\\\\\\\\), and \\u to prevent JSON parsing (ObjectMapper) errors.
+                            6. **[CRITICAL: strict Output]** NEVER output any conversational filler, greetings, or explanations. ONLY output a valid JSON object starting and ending with curly braces {}.
                             
-                            [필수 출력 형식] (반드시 JSON)
+                            [Required Output Format] (MUST be valid JSON)
                             {
                                 "memories": [
-                                    { "summary": "[지식] Spring Boot의 RestTemplate을 사용하면..." },
-                                    { "summary": "[사용자 정보] 사용자는 백엔드 개발에 깊은 이해도를..." }
+                                    { "summary": "[Knowledge] Using Spring Boot's RestTemplate allows..." },
+                                    { "summary": "[User Info] The user has a deep understanding of backend development..." }
                                 ]
                             }
                             """;
@@ -296,7 +285,7 @@ public class MemoryService {
 
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("model", targetModel);
-        requestBody.put("messages", List.of(Map.of("role", "system", "content", systemInstruction), Map.of("role", "user", "content", "입력 텍스트:\n" + content)));
+        requestBody.put("messages", List.of(Map.of("role", "system", "content", systemInstruction), Map.of("role", "user", "content", "Input Text:\n" + content)));
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -308,7 +297,7 @@ public class MemoryService {
         try {
             ResponseEntity<JsonNode> response = restTemplate.postForEntity(url, entity, JsonNode.class);
             llmResponse = response.getBody().path("choices").get(0).path("message").path("content").asText();
-        } catch (Exception e) { throw new RuntimeException("API 직접 호출 실패", e); }
+        } catch (Exception e) { throw new RuntimeException("Direct API call failed", e); }
 
         String cleanedResponse = llmResponse.trim();
         int jsonStart = cleanedResponse.indexOf("{");
@@ -317,30 +306,24 @@ public class MemoryService {
         if (jsonStart != -1 && jsonEnd != -1) {
             cleanedResponse = cleanedResponse.substring(jsonStart, jsonEnd + 1);
         } else {
-            throw new RuntimeException("LLM 응답에서 JSON 포맷을 찾을 수 없습니다.");
+            throw new RuntimeException("Cannot find JSON format in LLM response.");
         }
 
         ExtractionMemoryResult extraction;
         try {
             extraction = objectMapper.readValue(cleanedResponse, ExtractionMemoryResult.class);
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("JSON 파싱 실패", e);
+            throw new RuntimeException("JSON parsing failed", e);
         }
 
         if (extraction != null && extraction.memories() != null) {
             for (var item : extraction.memories()) {
                 float[] vector = embeddingModel.embed(item.summary());
-                // 🌟 self 호출로 변경
                 saveIds.add(self.saveRawMemoryToDb(workspace, item.summary(), vector));
             }
         }
         return saveIds;
     }
-
-    // --- 철저하게 분리된 짧은 DB 트랜잭션 메서드들 ---
-
-    // 🌟 [핵심 픽스 3] 스프링 프록시는 protected 메서드에는 트랜잭션을 적용하지 않습니다!
-    // 반드시 public으로 열어두어야 합니다.
 
     @Transactional
     public void deductCredit(Long memberId, int cost) {

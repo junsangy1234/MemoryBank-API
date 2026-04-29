@@ -1,12 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.get(
-        // 🌟 hasStarterPack 추가
         ['memoryBankApiKey', 'userName', 'userRole', 'currentWorkspaceId', 'workspaces', 'isSavingInProgress', 'dailyCredits', 'hasStarterPack'],
         (data) => {
             if (!data.memoryBankApiKey || !data.workspaces) return;
 
             const currentRole = data.userRole || 'FREE';
-            const hasStarterPack = data.hasStarterPack || false; // 🌟 추가
+            const hasStarterPack = data.hasStarterPack || false;
 
             showLoggedInUI(
                 data.userName,
@@ -15,14 +14,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 data.isSavingInProgress,
                 data.dailyCredits ?? 0,
                 currentRole,
-                hasStarterPack // 🌟 파라미터 추가
+                hasStarterPack
             );
 
             const tabMenu = document.getElementById('tab-menu');
             if (tabMenu) tabMenu.style.display = 'flex';
-            updateStoreVisibility(currentRole);
+            updateStoreVisibility(currentRole, hasStarterPack);
 
-            silentRefreshUserData(); // 이제 팝업 열 때마다 실시간 동기화됨!
+            silentRefreshUserData();
             checkActiveJobProgress();
             renderHistory();
         }
@@ -42,15 +41,14 @@ async function silentRefreshUserData() {
             if (response.ok) {
                 const result = await response.json();
 
-                // 🌟 무조건 스토리지 덮어쓰기 (바뀐 값이 있으면 onChange 리스너가 화면을 즉시 새로고침함)
                 chrome.storage.local.set({
                     userRole: result.role || data.userRole || 'FREE',
                     dailyCredits: result.dailyCredits ?? 0,
-                    hasStarterPack: result.hasStarterPack || false // DB에서 값 받아오기
+                    hasStarterPack: result.hasStarterPack || false
                 });
             }
         } catch (e) {
-            console.error("실시간 동기화 실패", e);
+            console.error("Real-time sync failed", e);
         }
     });
 }
@@ -75,7 +73,7 @@ function silentRefreshViaGoogleToken(today) {
                 if (today) saveData.lastCreditResetDate = today;
                 chrome.storage.local.set(saveData);
             } catch (error) {
-                console.error("백그라운드 동기화 실패:", error);
+                console.error("Background sync failed:", error);
             }
             resolve();
         });
@@ -88,7 +86,7 @@ chrome.storage.onChanged.addListener((changes) => {
             lockWorkspaceUI();
             const statusMsg = document.getElementById('status-message');
             statusMsg.style.color = '#ff9800';
-            statusMsg.innerHTML = `⏳ <b>웹페이지에서 작업 진행 중!</b><br>완료될 때까지 조작이 제한됩니다.`;
+            statusMsg.innerHTML = `⏳ <b>Task in progress on webpage!</b><br>Controls are restricted until completion.`;
         } else {
             location.reload();
         }
@@ -118,16 +116,16 @@ function lockWorkspaceUI() {
 document.getElementById('login-btn').addEventListener('click', () => {
     const btn = document.getElementById('login-btn');
     const statusMsg = document.getElementById('status-message');
-    btn.innerHTML = '⏳ 로그인 중...';
+    btn.innerHTML = '⏳ Logging in...';
     btn.disabled = true;
 
     chrome.identity.getAuthToken({ interactive: true }, async (token) => {
         if (chrome.runtime.lastError) {
-            btn.innerHTML = 'Google 계정으로 로그인';
+            btn.innerHTML = 'Sign in with Google';
             btn.disabled = false;
             statusMsg.style.display = 'block';
             statusMsg.style.color = '#ef4444';
-            statusMsg.innerHTML = `❌ 로그인 실패: ${chrome.runtime.lastError.message}`;
+            statusMsg.innerHTML = `❌ Login failed: ${chrome.runtime.lastError.message}`;
             return;
         }
         try {
@@ -138,10 +136,10 @@ document.getElementById('login-btn').addEventListener('click', () => {
                 body: JSON.stringify({ accessToken: token })
             });
 
-            if (!response.ok) throw new Error("서버 인증 실패");
+            if (!response.ok) throw new Error("Server authentication failed");
             const data = await response.json();
 
-            if (!data.apiKey || !data.workspaces) throw new Error("응답 데이터 오류");
+            if (!data.apiKey || !data.workspaces) throw new Error("Response data error");
 
             const defaultWorkspaceId = data.workspaces[0].id;
             const fetchedCredits = data.dailyCredits ?? 0;
@@ -161,14 +159,14 @@ document.getElementById('login-btn').addEventListener('click', () => {
 
                 const tabMenu = document.getElementById('tab-menu');
                 if (tabMenu) tabMenu.style.display = 'flex';
-                updateStoreVisibility(safeRole);
+                updateStoreVisibility(safeRole, data.hasStarterPack || false);
             });
         } catch {
-            btn.innerHTML = 'Google 계정으로 로그인';
+            btn.innerHTML = 'Sign in with Google';
             btn.disabled = false;
             statusMsg.style.display = 'block';
             statusMsg.style.color = '#ef4444';
-            statusMsg.innerHTML = `🚨 서버 연결 실패`;
+            statusMsg.innerHTML = `🚨 Server connection failed`;
         }
     });
 });
@@ -189,18 +187,17 @@ function showLoggedInUI(name, workspaces, currentWsId, isSaving, credits, role, 
 
     let roleHtml = `<span class="role-badge ${role.toLowerCase()}">${role}</span>`;
 
-    // 🌟 파라미터로 받은 hasStarterPack을 안전하게 검사
     if (hasStarterPack) {
-        roleHtml += `<span title="스타터팩 평생 소장" style="font-size: 15px; margin-left: 5px; vertical-align: middle; cursor: help; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1));">💎</span>`;
+        roleHtml += `<span title="Starter Pack Owner" style="font-size: 14px; margin-left: 5px; vertical-align: middle; cursor: help; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));">🐣</span>`;
     }
 
     if (isSaving) {
         lockWorkspaceUI();
         statusMsg.style.color = '#f59e0b';
-        statusMsg.innerHTML = `⏳ <b>웹페이지에서 작업 진행 중!</b><br>완료될 때까지 조작이 제한됩니다.`;
+        statusMsg.innerHTML = `⏳ <b>Task in progress on webpage!</b><br>Controls are restricted until completion.`;
     } else {
         statusMsg.style.color = '#10b981';
-        statusMsg.innerHTML = `✅ 환영합니다, <b>${name}</b>님! ${roleHtml}`;
+        statusMsg.innerHTML = `✅ Welcome, <b>${name}</b>! ${roleHtml}`;
     }
 
     const wsSelect = document.getElementById('workspace-select');
@@ -217,6 +214,26 @@ function showLoggedInUI(name, workspaces, currentWsId, isSaving, credits, role, 
 
     document.getElementById('workspace-container').style.display = 'block';
     document.getElementById('history-container').style.display = 'block';
+
+    const limits = { FREE: 1, LITE: 2, PRO: 4, PREMIUM: 9999 };
+    const currentLimit = limits[role] || 1;
+    const currentCount = workspaces ? workspaces.length : 0;
+    const addBtn = document.getElementById('add-workspace-btn');
+
+    if (currentCount >= currentLimit) {
+        addBtn.innerHTML = '🔒 Limit Reached';
+        addBtn.style.background = '#f3f4f6';
+        addBtn.style.color = '#9ca3af';
+        addBtn.style.borderColor = '#d1d5db';
+        addBtn.style.cursor = 'not-allowed';
+    } else {
+        addBtn.innerHTML = '✨ New Workspace';
+        addBtn.style.background = 'white';
+        addBtn.style.color = '#3b82f6';
+        addBtn.style.borderColor = '#3b82f6';
+        addBtn.style.cursor = 'pointer';
+    }
+
     wsSelect.addEventListener('change', (e) => chrome.storage.local.set({ currentWorkspaceId: e.target.value }));
 }
 
@@ -225,23 +242,38 @@ document.getElementById('logout-btn').addEventListener('click', () => {
 });
 
 document.getElementById('add-workspace-btn').addEventListener('click', async () => {
-    const wsName = prompt("새로운 워크스페이스 이름을 입력하세요:");
-    if (!wsName?.trim()) return;
+    chrome.storage.local.get(['memoryBankApiKey', 'workspaces', 'userRole'], async ({ memoryBankApiKey, workspaces, userRole }) => {
 
-    chrome.storage.local.get(['memoryBankApiKey', 'workspaces'], async ({ memoryBankApiKey, workspaces }) => {
+        const limits = { FREE: 1, LITE: 2, PRO: 4, PREMIUM: 9999 };
+        const currentRole = userRole || 'FREE';
+        const currentLimit = limits[currentRole] || 1;
+        const currentCount = workspaces ? workspaces.length : 0;
+
+        if (currentCount >= currentLimit) {
+            const goStore = confirm(`🚨 Workspace Limit Exceeded!\n\nYour ${currentRole} plan can create up to ${currentLimit} workspaces.\n\nWould you like to upgrade your plan to increase the limit?`);
+
+            if (goStore) {
+                switchTab('store');
+            }
+            return;
+        }
+
+        const wsName = prompt("Enter a new workspace name:");
+        if (!wsName?.trim()) return;
+
         try {
             const response = await fetch("https://aimemorybank.cloud/api/workspaces", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "X-API-KEY": memoryBankApiKey },
                 body: JSON.stringify({ name: wsName.trim() })
             });
-            if (!response.ok) throw new Error("생성 실패");
+            if (!response.ok) throw new Error("Creation failed");
 
             const newWs = await response.json();
             const updated = [...(workspaces || []), newWs];
             chrome.storage.local.set({ workspaces: updated, currentWorkspaceId: newWs.id }, () => location.reload());
         } catch {
-            alert("🚨 워크스페이스 생성 중 오류가 발생했습니다.");
+            alert("🚨 Error occurred while creating workspace.");
         }
     });
 });
@@ -249,7 +281,7 @@ document.getElementById('add-workspace-btn').addEventListener('click', async () 
 document.getElementById('edit-workspace-btn').addEventListener('click', () => {
     chrome.storage.local.get(['memoryBankApiKey', 'currentWorkspaceId', 'workspaces'], async ({ memoryBankApiKey, currentWorkspaceId, workspaces }) => {
         const currentWs = workspaces.find(w => w.id == currentWorkspaceId);
-        const newName = prompt("워크스페이스의 새 이름을 입력하세요:", currentWs?.name ?? "");
+        const newName = prompt("Enter new name for the workspace:", currentWs?.name ?? "");
         if (!newName?.trim() || newName === currentWs?.name) return;
 
         try {
@@ -263,7 +295,7 @@ document.getElementById('edit-workspace-btn').addEventListener('click', () => {
             const updated = workspaces.map(w => w.id == currentWorkspaceId ? { ...w, name: newName.trim() } : w);
             chrome.storage.local.set({ workspaces: updated }, () => location.reload());
         } catch {
-            alert(`🚨 이름 수정 실패!`);
+            alert(`🚨 Name edit failed!`);
         }
     });
 });
@@ -271,22 +303,22 @@ document.getElementById('edit-workspace-btn').addEventListener('click', () => {
 document.getElementById('delete-workspace-btn').addEventListener('click', () => {
     chrome.storage.local.get(['memoryBankApiKey', 'currentWorkspaceId', 'workspaces'], async ({ memoryBankApiKey, currentWorkspaceId, workspaces }) => {
         if (workspaces.length <= 1) {
-            alert("최소 1개의 워크스페이스는 유지해야 합니다.");
+            alert("You must keep at least 1 workspace.");
             return;
         }
-        if (!confirm("정말 이 워크스페이스를 삭제하시겠습니까?\n내부의 모든 기억이 영구적으로 삭제됩니다!")) return;
+        if (!confirm("Are you sure you want to delete this workspace?\nAll memories inside will be permanently deleted!")) return;
 
         try {
             const response = await fetch(`https://aimemorybank.cloud/api/workspaces/${currentWorkspaceId}`, {
                 method: "DELETE",
                 headers: { "X-API-KEY": memoryBankApiKey }
             });
-            if (!response.ok) throw new Error("삭제 실패");
+            if (!response.ok) throw new Error("Deletion failed");
 
             const updated = workspaces.filter(w => w.id != currentWorkspaceId);
             chrome.storage.local.set({ workspaces: updated, currentWorkspaceId: updated[0].id }, () => location.reload());
         } catch {
-            alert("🚨 삭제 중 오류가 발생했습니다.");
+            alert("🚨 Error occurred during deletion.");
         }
     });
 });
@@ -305,7 +337,7 @@ function renderHistory() {
         const list = document.getElementById('history-list');
         const history = data.activityHistory || [];
         if (history.length === 0) {
-            list.innerHTML = '<li style="text-align: center; color: #9ca3af; padding: 10px;">최근 내역이 없습니다.</li>';
+            list.innerHTML = '<li style="text-align: center; color: #9ca3af; padding: 10px;">No recent history.</li>';
             return;
         }
         list.innerHTML = history.map(item => `
@@ -335,17 +367,15 @@ function checkActiveJobProgress() {
         container.style.display = 'block';
         const { jobId, startTime } = data.activeMbJob;
 
-        // 🌟 [수정 포인트] 팝업 늦게 열었을 때, 경과 시간(초)에 비례해서 퍼센트를 당겨놓음
         if (startTime) {
             const elapsedSeconds = (Date.now() - startTime) / 1000;
-            simulatedPercent = Math.min(85, elapsedSeconds * 1.5); // 1초당 1.5%씩 올랐다고 가정
+            simulatedPercent = Math.min(85, elapsedSeconds * 1.5);
         }
 
         const percentEl = document.getElementById('job-percent');
         const barEl = document.getElementById('job-progress-bar');
         const statusEl = document.getElementById('job-status-text');
 
-        // 여는 즉시 보정된 퍼센트로 렌더링
         percentEl.textContent = `${Math.round(simulatedPercent)}%`;
         barEl.style.width = `${Math.round(simulatedPercent)}%`;
 
@@ -377,17 +407,17 @@ function checkActiveJobProgress() {
 
                     percentEl.textContent = `${displayPercent}%`;
                     barEl.style.width = `${displayPercent}%`;
-                    statusEl.textContent = total > 0 ? `분석 중... (${actualProcessed}/${total} 블록)` : "서버 텍스트 분류 중...";
+                    statusEl.textContent = total > 0 ? `Analyzing... (${actualProcessed}/${total} blocks)` : "Server parsing text...";
 
                 } else if (jobData.status === "COMPLETED") {
                     clearInterval(activePollInterval);
                     percentEl.textContent = "100%";
                     barEl.style.width = "100%";
-                    statusEl.textContent = "✅ 저장 완료!";
+                    statusEl.textContent = "✅ Save Complete!";
                     setTimeout(() => { container.style.display = 'none'; renderHistory(); }, 2500);
                 } else if (jobData.status === "FAILED") {
                     clearInterval(activePollInterval);
-                    statusEl.textContent = "🚨 서버 처리 실패";
+                    statusEl.textContent = "🚨 Server Processing Failed";
                     statusEl.style.color = "#ef4444";
                     setTimeout(() => { container.style.display = 'none'; }, 3000);
                 }
@@ -402,7 +432,6 @@ function checkActiveJobProgress() {
 // [결제 연동] 레몬스퀴지 체크아웃 팝업 띄우기
 // =========================================================
 
-// popup.js 상단에 추가
 const CHECKOUT_LINKS = {
     STARTER: "https://memory-bank.lemonsqueezy.com/checkout/buy/5673c702-c027-4ce2-94d3-2d3abbc703ba",
     LITE: "https://memory-bank.lemonsqueezy.com/checkout/buy/48419913-7c97-4859-b3b6-50438e33db61",
@@ -410,7 +439,6 @@ const CHECKOUT_LINKS = {
     PREMIUM: "https://memory-bank.lemonsqueezy.com/checkout/buy/49f98617-3a0d-4940-bbe4-ac2389965cd8"
 };
 
-// 🌟 탭 전환 로직
 document.getElementById('tab-settings').addEventListener('click', () => switchTab('settings'));
 document.getElementById('tab-store').addEventListener('click', () => switchTab('store'));
 
@@ -425,7 +453,6 @@ function switchTab(tab) {
     document.getElementById('tab-store').style.borderBottom = isSettings ? 'none' : '2px solid #3b82f6';
 }
 
-// 🌟 결제 버튼 이벤트 (이메일 파라미터 포함)
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('upgrade-btn')) {
         const plan = e.target.getAttribute('data-plan');
@@ -433,29 +460,26 @@ document.addEventListener('click', (e) => {
 
         chrome.storage.local.get(['userEmail'], (data) => {
             const email = data.userEmail;
-            if (!email) { alert("로그인이 필요합니다."); return; }
+            if (!email) { alert("Login is required."); return; }
 
-            // 레몬스퀴지 커스텀 데이터 및 자동 이메일 입력 파라미터 주입
             const finalUrl = `${baseUrl}?checkout[custom][user_email]=${encodeURIComponent(email)}&checkout[email]=${encodeURIComponent(email)}`;
             chrome.tabs.create({ url: finalUrl });
         });
     }
 });
 
-function updateStoreVisibility(role) {
+function updateStoreVisibility(role, hasStarterPack) {
     const starter = document.getElementById('card-starter');
     const lite = document.getElementById('card-lite');
     const pro = document.getElementById('card-pro');
     const premium = document.getElementById('card-premium');
     const storeTab = document.getElementById('tab-store');
 
-    // 🌟 HTML에 카드가 없어서 에러가 터지는 현상 원천 차단
     if (!starter || !lite || !pro || !premium) {
-        console.error("상점 UI 요소를 찾을 수 없습니다. popup.html에 id를 확인하세요.");
+        console.error("Store UI elements not found.");
         return;
     }
 
-    // 초기화: 일단 다 보임
     starter.style.display = 'block';
     lite.style.display = 'block';
     pro.style.display = 'block';
@@ -463,17 +487,10 @@ function updateStoreVisibility(role) {
     if (storeTab) storeTab.style.display = 'block';
 
     if (role === 'FREE') {
-        // FREE: 모든 혜택 다 뜸
-    } else if (role === 'LITE') {
-        // LITE: Starter, LITE 사라짐
-        starter.style.display = 'none';
-        lite.style.display = 'none';
-    } else if (role === 'PRO') {
-        // PRO: Starter, LITE 사라짐 (PRO, PREMIUM만 남음)
+    } else if (role === 'LITE' || role === 'PRO') {
         starter.style.display = 'none';
         lite.style.display = 'none';
     } else if (role === 'PREMIUM') {
-        // PREMIUM: 아무것도 안 뜸 (상점 탭 자체를 숨김)
         starter.style.display = 'none';
         lite.style.display = 'none';
         pro.style.display = 'none';
@@ -481,8 +498,7 @@ function updateStoreVisibility(role) {
         if (storeTab) storeTab.style.display = 'none';
     }
 
-    // 혹시 모를 에러 방지: FREE 이상이면 무조건 스타터팩은 숨김
-    if (role && role !== 'FREE') {
+    if (hasStarterPack) {
         starter.style.display = 'none';
     }
 }

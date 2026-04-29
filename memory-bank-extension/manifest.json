@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI Memory Bank",
   "version": "1.0",
-  "description": "ChatGPT와 Gemini에서 나의 개인 기억을 불러오고 저장합니다.",
+  "description": "Build your intelligent, searchable knowledge base from AI conversations and web snippets.",
   "permissions": [
     "storage",
     "activeTab",
@@ -21,11 +21,19 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "AI Memory Bank 열기"
+    "default_title": "Open AI Memory Bank"
   },
   "content_scripts": [
     {
-      "matches": ["https://chatgpt.com/*", "https://gemini.google.com/*", "https://claude.ai/*", "https://grok.com/*", "https://chat.deepseek.com/*"],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*",
+        "https://claude.ai/*",
+        "https://grok.com/*",
+        "https://chat.deepseek.com/*",
+        "https://www.perplexity.ai/*",
+        "https://poe.com/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
