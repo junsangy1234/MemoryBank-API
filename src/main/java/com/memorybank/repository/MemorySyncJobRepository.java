@@ -15,8 +15,13 @@ import java.util.Optional;
 public class MemorySyncJobRepository {
     private final EntityManager em;
 
-    public void save(MemorySyncJob memorySyncJob){
-        em.persist(memorySyncJob);
+    public MemorySyncJob save(MemorySyncJob memorySyncJob){
+        if (memorySyncJob.getId() == null) {
+            em.persist(memorySyncJob);
+            return memorySyncJob;
+        } else {
+            return em.merge(memorySyncJob);
+        }
     }
 
     public void saveAndFlush(MemorySyncJob memorySyncJob) {
@@ -48,4 +53,14 @@ public class MemorySyncJobRepository {
                 .setParameter("beforeTime", beforeTime)
                 .getResultList();
     }
+
+    // 워크스페이스 ID와 상태로 조회 (기존 작업 취소용)
+    public List<MemorySyncJob> findByWorkspaceIdAndStatus(Long workspaceId, SyncStatus status) {
+        return em.createQuery("SELECT m FROM MemorySyncJob m " +
+                                "WHERE m.workspace.id = :workspaceId AND m.status = :status", MemorySyncJob.class)
+                .setParameter("workspaceId", workspaceId)
+                .setParameter("status", status)
+                .getResultList();
+    }
+
 }

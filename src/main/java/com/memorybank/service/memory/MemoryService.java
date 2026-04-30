@@ -77,7 +77,14 @@ public class MemoryService {
     private final Executor aiExecutor;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = createRestTemplate();
+
+    private RestTemplate createRestTemplate() {
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10000); // 연결 대기 10초
+        factory.setReadTimeout(300000);   // LLM 응답 대기 최대 5분 (넘어가면 끊어버림)
+        return new RestTemplate(factory);
+    }
 
     @Value("${spring.ai.openai.api-key}")
     private String apiKey;
@@ -135,6 +142,13 @@ public class MemoryService {
         Workspace workspace = workspaceService.findByIdWithMember(request.workspaceId());
         if(!workspace.getMember().getId().equals(memberId)) throw new IllegalStateException("Unauthorized access");
 
+        //새 스캔 시작 전, 해당 워크스페이스의 기존 PENDING 작업들을 강제 취소(무효화)
+        List<MemorySyncJob> oldJobs = memorySyncJobRepository.findByWorkspaceIdAndStatus(workspace.getId(), SyncStatus.PENDING);
+        for(MemorySyncJob old : oldJobs) {
+            old.markAsFailed();
+            memorySyncJobRepository.save(old);
+        }
+
         String content = request.rawContent() != null ? request.rawContent() : "";
         int calculatedCredits = Math.max(1, (int) Math.ceil(content.length() / 5000.0));
 
@@ -167,6 +181,13 @@ public class MemoryService {
                 CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                     try {
                         semaphore.acquire();
+
+                        MemorySyncJob currentJob = memorySyncJobRepository.findByIdWithMember(jobId).orElse(null);
+                        if (currentJob == null || currentJob.getStatus() != SyncStatus.PENDING) {
+                            log.warn("🚨 Job {} is no longer PENDING. Skipping old chunk to prevent dirty data.", jobId);
+                            return; // AI 호출 안 하고 스레드 즉시 종료 (엉뚱한 과거 데이터 저장 완벽 차단)
+                        }
+
                         executeAiExtractionAndSave(workspace, chunkText, "FULL_CONV");
 
                         int currentProcessed = processedCount.incrementAndGet();
