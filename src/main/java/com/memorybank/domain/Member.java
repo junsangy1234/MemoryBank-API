@@ -37,7 +37,7 @@ public class Member {
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean hasStarterPack = false;
 
-    private int dailyCredits = 30; //기본 크레딧
+    private int dailyCredits = 20; //기본 크레딧
 
     private LocalDate lastCreditResetDate = LocalDate.now();
 
@@ -61,7 +61,7 @@ public class Member {
             this.lastCreditResetDate = today;
 
             //등급에 따라 리셋
-            if(this.role == Role.FREE) this.dailyCredits = 30;
+            if(this.role == Role.FREE) this.dailyCredits = 20;
             else if(this.role == Role.LITE) this.dailyCredits = 100;
             else if(this.role == Role.PRO) this.dailyCredits = 500;
             else if(this.role == Role.PREMIUM) this.dailyCredits = 2000;
