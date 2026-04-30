@@ -8,8 +8,13 @@ import com.memorybank.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -22,6 +27,9 @@ public class PaymentService {
 
     @Value("${lemon-squeezy.webhook-secret}")
     private String webhookSecret;
+
+    @Value("${lemon-squeezy.api-key}")
+    private String lemonSqueezyApiKey;
 
     private final MemberRepository memberRepository;
     private final ObjectMapper objectMapper;
@@ -113,4 +121,74 @@ public class PaymentService {
             throw new SecurityException("서명 검증 과정에서 오류 발생", e);
         }
     }
+
+    // ================= [고객 포털 URL 조회 로직] =================
+    public String getCustomerPortalUrl(Member member) {
+        // 1. 회원의 이메일을 기반으로 Lemon Squeezy Customer ID 조회
+        String customerId = getLemonSqueezyCustomerId(member.getEmail());
+        if (customerId == null) {
+            return null; // 결제 기록(고객 정보)이 없는 경우
+        }
+
+        // 2. Customer ID로 고객 정보(포털 URL 포함) 재요청
+        try {
+            org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.set("Accept", "application/vnd.api+json");
+            headers.set("Authorization", "Bearer " + lemonSqueezyApiKey);
+
+            org.springframework.http.HttpEntity<String> entity = new org.springframework.http.HttpEntity<>(headers);
+
+            org.springframework.http.ResponseEntity<String> response = restTemplate.exchange(
+                    "https://api.lemonsqueezy.com/v1/customers/" + customerId,
+                    org.springframework.http.HttpMethod.GET,
+                    entity,
+                    String.class
+            );
+
+            // 3. JSON 응답에서 customer_portal URL 추출
+            JsonNode rootNode = objectMapper.readTree(response.getBody());
+            String portalUrl = rootNode.path("data").path("attributes").path("urls").path("customer_portal").asText();
+
+            log.info("회원 ID {}의 결제 관리 포털 URL 발급 성공", member.getId());
+            return portalUrl;
+
+        } catch (Exception e) {
+            log.error("Lemon Squeezy 고객 포털 URL 발급 실패 (Email: {})", member.getEmail(), e);
+            return null;
+        }
+    }
+
+    //이메일로 Lemon customer ID find
+    public String getLemonSqueezyCustomerId(String email){
+        try{
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.set("Accept", "application/vnd.api+json");
+            headers.set("Authorization", "Bearer " + lemonSqueezyApiKey);
+
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+
+            // 이메일로 필터링하여 고객(Customer) 목록 조회
+            org.springframework.http.ResponseEntity<String> response = restTemplate.exchange(
+                    "https://api.lemonsqueezy.com/v1/customers?filter[email]=" + email,
+                    org.springframework.http.HttpMethod.GET,
+                    entity,
+                    String.class
+            );
+
+            JsonNode rootNode = objectMapper.readTree(response.getBody());
+            JsonNode dataArray = rootNode.path("data");
+
+            //일치 고객 데이터 있으면 첫번째 고객 id 반환
+            if(dataArray.isArray() && dataArray.size() > 0){
+                return dataArray.get(0).path("id").asText();
+            }
+            return null;
+        } catch (Exception e){
+            log.error("Lemon Squeezy Customer ID 조회 실패 (Email: {})", email, e);
+            return null;
+        }
+    }
+
 }

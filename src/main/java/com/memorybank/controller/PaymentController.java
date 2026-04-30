@@ -55,4 +55,18 @@ public class PaymentController {
         paymentService.processWebhook(signature, rawBody);
         return ResponseEntity.ok("Webhook received successfully");
     }
+
+    // 고객 포털
+    @GetMapping("/portal")
+    public ResponseEntity<Map<String, String>> getCustomerPortalUrl(@RequestHeader("X-API-KEY") String apiKey) {
+        Member member = memberService.findByApiKey(apiKey);
+
+        String portalUrl = paymentService.getCustomerPortalUrl(member);
+
+        if (portalUrl == null || portalUrl.isEmpty()) {
+            return ResponseEntity.notFound().build(); // 활성화된 구독이 없는 경우 404 반환
+        }
+
+        return ResponseEntity.ok(Map.of("portalUrl", portalUrl));
+    }
 }

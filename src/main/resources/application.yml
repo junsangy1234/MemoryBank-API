@@ -25,6 +25,7 @@ spring:
 
 lemon-squeezy:
   webhook-secret: ${LEMON_SQUEEZY_SECRET}
+  api-key: ${LEMON_SQUEEZY_API}
 
 spring.ai.openai.api-key: ${OPENAI_API_KEY}rm -rf .git
 

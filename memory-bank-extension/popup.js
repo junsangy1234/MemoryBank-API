@@ -487,18 +487,77 @@ function updateStoreVisibility(role, hasStarterPack) {
     if (storeTab) storeTab.style.display = 'block';
 
     if (role === 'FREE') {
-    } else if (role === 'LITE' || role === 'PRO') {
+    } else if (role === 'LITE') {
         starter.style.display = 'none';
         lite.style.display = 'none';
-    } else if (role === 'PREMIUM') {
+    } else if (role === 'PRO') {
+        starter.style.display = 'none';
+        lite.style.display = 'none';
+        pro.style.display = 'none';
+    }
+    else if (role === 'PREMIUM') {
         starter.style.display = 'none';
         lite.style.display = 'none';
         pro.style.display = 'none';
         premium.style.display = 'none';
-        if (storeTab) storeTab.style.display = 'none';
     }
 
     if (hasStarterPack) {
         starter.style.display = 'none';
     }
 }
+
+
+// =========================================================
+// [결제 관리] 레몬스퀴지 고객 포털 팝업 띄우기
+// =========================================================
+
+document.addEventListener('click', async (e) => {
+    if (e.target.id === 'manage-subscription-btn') {
+        const btn = e.target;
+        btn.innerHTML = '⏳ Loading...';
+        btn.disabled = true;
+
+        chrome.storage.local.get(['memoryBankApiKey'], async (data) => {
+            if (!data.memoryBankApiKey) {
+                alert("Login is required to manage subscription.");
+                btn.innerHTML = 'Manage Subscription';
+                btn.disabled = false;
+                return;
+            }
+
+            try {
+                // 백엔드에 레몬스퀴지 고객 포털 URL 요청
+                const response = await fetch("https://aimemorybank.cloud/api/billing/portal", {
+                    method: "GET",
+                    headers: { "X-API-KEY": data.memoryBankApiKey }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        alert("No active subscription found. You can purchase a plan first.");
+                    } else {
+                        throw new Error("Failed to retrieve billing portal URL");
+                    }
+                    return;
+                }
+
+                const result = await response.json();
+
+                // 받아온 URL로 새 탭 열기
+                if (result.portalUrl) {
+                    chrome.tabs.create({ url: result.portalUrl });
+                } else {
+                    alert("Error: Missing portal URL in response.");
+                }
+
+            } catch (error) {
+                console.error("Billing Portal Error:", error);
+                alert("🚨 Failed to open billing portal. Please try again later.");
+            } finally {
+                btn.innerHTML = 'Manage Subscription';
+                btn.disabled = false;
+            }
+        });
+    }
+});
