@@ -79,11 +79,17 @@ public class PaymentService {
                 }
                 log.info("회원 ID {} 결제 및 업그레이드 완료! 상품ID: {}", member.getId(), productId);
 
-            } else if ("subscription_cancelled".equals(eventName) || "subscription_expired".equals(eventName)) {
-                // 구독이 취소되거나 만료되면 다시 FREE 등급으로 강등
+            } else if ("subscription_cancelled".equals(eventName)) {
+                // [수정 핵심 1] 구독 취소 버튼을 누른 상태 (결제 만료일까지 혜택 유지)
+                // 유저의 Role을 건드리지 않고, 운영자 확인용 로그만 남겨둡니다.
+                log.info("⚠️ 회원 ID {} 구독 취소 예약 (결제일 만료 전까지 기존 혜택 유지)", member.getId());
+
+            } else if ("subscription_expired".equals(eventName)) {
+                // [수정 핵심 2] 결제 기간이 완전히 끝나서 진짜 만료된 상태 -> 이때 강등!
                 member.upgradeRole(Role.FREE);
-                member.resetCreditsIfNeeded();
-                log.info("💔 회원 ID {} 구독 취소/만료 처리 완료 (FREE 강등)", member.getId());
+                // FREE로 변경.
+                member.resetRole();
+                log.info("💔 회원 ID {} 구독 완전히 만료됨 (FREE 강등 완료)", member.getId());
             } else {
                 log.info("무시되는 웹훅 이벤트입니다: {}", eventName);
             }

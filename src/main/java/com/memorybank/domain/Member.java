@@ -7,7 +7,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -87,6 +86,11 @@ public class Member {
     public void unlockStarterPack() {
         this.hasStarterPack = true; // 전체스캔 평생 해금
         this.dailyCredits += 100;   // 1회성 100 크레딧 보너스 충전
+    }
+
+    public void resetRole(){
+        this.role = Role.FREE;
+        this.dailyCredits = 20;
     }
 
     public void upgradeRole(Role newRole) {
