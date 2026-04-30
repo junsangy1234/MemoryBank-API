@@ -105,7 +105,11 @@ public class MemoryService {
         Workspace workspace = workspaceService.findByIdWithMember(workspaceId);
         if (!workspace.getMember().getId().equals(memberId)) throw new IllegalStateException("Unauthorized access");
 
-        self.deductCredit(memberId, CreditPolicy.SAVE_COST);
+        if(type.equalsIgnoreCase("SNIPPET")) {
+            self.deductCredit(memberId, CreditPolicy.SAVE_COST - 1);
+        }else{
+            self.deductCredit(memberId, CreditPolicy.SAVE_COST);
+        }
 
         List<Long> saveIds = new ArrayList<>();
 
@@ -131,10 +135,13 @@ public class MemoryService {
         Workspace workspace = workspaceService.findByIdWithMember(request.workspaceId());
         if(!workspace.getMember().getId().equals(memberId)) throw new IllegalStateException("Unauthorized access");
 
+        String content = request.rawContent() != null ? request.rawContent() : "";
+        int calculatedCredits = Math.max(1, (int) Math.ceil(content.length() / 5000.0));
+
         MemorySyncJob pendingJob = MemorySyncJob.createPendingJob(workspace, request.rawContent(), request.estimatedCredits());
         memorySyncJobRepository.save(pendingJob);
 
-        self.deductCredit(memberId, request.estimatedCredits());
+        self.deductCredit(memberId, calculatedCredits);
 
         return pendingJob.getId();
     }
