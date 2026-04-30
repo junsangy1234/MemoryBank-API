@@ -13,9 +13,57 @@ style.textContent = `
     .mb-busy-mode { transform: scale(1) !important; background-color: #9ca3af !important; }
 
     #mb-fullscan-lockdown { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0,0,0,0.85); z-index: 2147483647; display: flex; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(8px); color: white; text-align: center; }
-    
+
     .mb-slash-mode { color: #3b82f6 !important; font-weight: bold !important; transition: color 0.3s ease; }
     .mb-input-blocker { position: absolute; background-color: rgba(255,255,255,0.9); display: flex; justify-content: center; align-items: center; z-index: 2147483647; font-size: 14px; font-weight: bold; color: #3b82f6; backdrop-filter: blur(4px); border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); cursor: not-allowed; }
+
+    /* ===== Smart Compass Styles ===== */
+    #mb-bookmark-compass {
+        transition: border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease, opacity 0.3s ease;
+    }
+    .mb-compass-icon {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 32px;
+        height: 32px;
+        color: inherit;
+        transition: transform 0.3s ease;
+    }
+    .mb-compass-icon svg { display: block; }
+    .mb-compass-spin .mb-compass-icon { animation: mb-spin 1.4s linear infinite; }
+    .mb-compass-found {
+        border-color: #10b981 !important;
+        color: #10b981 !important;
+        box-shadow: 0 0 14px rgba(16, 185, 129, 0.55) !important;
+        opacity: 1 !important;
+    }
+    .mb-compass-error {
+        border-color: #ef4444 !important;
+        color: #ef4444 !important;
+        box-shadow: 0 0 14px rgba(239, 68, 68, 0.55) !important;
+        opacity: 1 !important;
+    }
+    #mb-bookmark-compass { position: fixed; }
+    #mb-bookmark-compass::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        right: calc(100% + 10px);
+        top: 50%;
+        transform: translateY(-50%);
+        background: #111827;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 6px 10px;
+        border-radius: 6px;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease;   /* ← 여기서 속도 조절 */
+    }
+    #mb-bookmark-compass:hover::after { opacity: 1; }
+
 `;
 document.head.appendChild(style);
 
@@ -35,8 +83,27 @@ const siteConfig = {
     "poe.com": '[class*="Message_botMessage"], [class*="Message_humanMessage"]'
 };
 
+// 나침반 SVG (위쪽 방향 - 저장점이 위에 있음)
+const COMPASS_SVG_UP = `
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <circle cx="16" cy="16" r="13" fill="#ffffff" stroke="currentColor" stroke-width="2"/>
+    <path d="M16 5 L20.5 16 L16 13.2 L11.5 16 Z" fill="currentColor"/>
+    <path d="M16 27 L20.5 16 L16 18.8 L11.5 16 Z" fill="currentColor" opacity="0.22"/>
+    <circle cx="16" cy="16" r="1.8" fill="currentColor"/>
+</svg>`;
+
+// 나침반 SVG (아래쪽 방향 - 저장점이 아래에 있음)
+const COMPASS_SVG_DOWN = `
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <circle cx="16" cy="16" r="13" fill="#ffffff" stroke="currentColor" stroke-width="2"/>
+    <path d="M16 27 L20.5 16 L16 18.8 L11.5 16 Z" fill="currentColor"/>
+    <path d="M16 5 L20.5 16 L16 13.2 L11.5 16 Z" fill="currentColor" opacity="0.22"/>
+    <circle cx="16" cy="16" r="1.8" fill="currentColor"/>
+</svg>`;
+
 chrome.storage.local.set({ isSavingInProgress: false });
 window.mbIsBusy = false;
+window.mbCompassLocked = false;
 window.addEventListener('beforeunload', () => {
     if (window.mbIsBusy) chrome.storage.local.set({ isSavingInProgress: false });
 });
@@ -350,7 +417,9 @@ function injectFloatingMenu() {
     const isGrok = window.location.hostname.includes('grok.com');
     Object.assign(fabContainer.style, {
         position: 'fixed', bottom: isGrok ? '30px' : '20px', right: isGrok ? '80px' : '20px', zIndex: '2147483640',
-        display: 'flex', flexDirection: 'column-reverse', alignItems: 'center', gap: '10px',
+        // [FIX] alignItems 'center' → 'flex-end' 로 변경하여 서브 버튼이 펼쳐질 때
+        // 메인 아이콘 위치가 흔들리지 않도록 우측 기준으로 고정
+        display: 'flex', flexDirection: 'column-reverse', alignItems: 'flex-end', gap: '10px',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
     });
 
@@ -367,7 +436,9 @@ function injectFloatingMenu() {
         position: 'relative', width: '56px', height: '56px', borderRadius: '50%',
         backgroundColor: '#3b82f6', color: 'white', border: 'none', fontSize: '24px',
         cursor: 'pointer', boxShadow: '0 4px 10px rgba(59, 130, 246, 0.3)', transition: 'transform 0.3s ease',
-        display: 'flex', justifyContent: 'center', alignItems: 'center'
+        display: 'flex', justifyContent: 'center', alignItems: 'center',
+        // [FIX] 서브 버튼들이 좌측으로 펼쳐져도 메인 버튼은 우측 끝에 고정
+        flexShrink: '0', alignSelf: 'flex-end'
     });
 
     const spinnerRing = document.createElement('div');
@@ -381,7 +452,9 @@ function injectFloatingMenu() {
             border: '1px solid #e5e7eb', borderRadius: '30px', fontSize: '13px', fontWeight: '600',
             cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', transition: 'all 0.2s ease-in-out',
             opacity: '0', transform: 'translateY(20px)', pointerEvents: 'none',
-            display: 'flex', alignItems: 'center'
+            display: 'flex', alignItems: 'center',
+            // [FIX] 서브 버튼도 우측 정렬 명시 (안정성 강화)
+            alignSelf: 'flex-end', flexShrink: '0'
         });
 
         const showCost = (show) => {
@@ -821,7 +894,7 @@ function initSlashCommandListener() {
 setTimeout(initSlashCommandListener, 2000);
 
 // =========================================================
-// 10. 스마트 나침반 (말풍선 개수 카운팅 방식으로 완벽 개선)
+// 10. 스마트 나침반 (SVG 아이콘 기반 — 깔끔 모던 리뉴얼)
 // =========================================================
 let isNavigatorInitialized = false;
 
@@ -836,21 +909,64 @@ async function initSmartNavigator() {
     Object.assign(compass.style, {
         position: 'fixed', right: isGrok ? '80px' : '20px', bottom: '260px',
         backgroundColor: '#ffffff', border: '2px solid #3b82f6', color: '#3b82f6',
-        padding: '10px 16px', borderRadius: '30px', fontSize: '12px', fontWeight: '900',
-        cursor: 'pointer', zIndex: '2147483647', display: 'none', alignItems: 'center', gap: '6px',
-        boxShadow: '0 4px 10px rgba(0,0,0,0.1)', transition: 'all 0.3s ease', opacity: '0.6',
+        width: '52px', height: '52px', padding: '0', borderRadius: '50%',
+        cursor: 'pointer', zIndex: '2147483647',
+        display: 'none', justifyContent: 'center', alignItems: 'center',
+        boxShadow: '0 4px 10px rgba(0,0,0,0.1)', opacity: '0.75',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
     });
 
+    // 내부 아이콘 컨테이너 (회전 애니메이션 대상)
+    const compassIcon = document.createElement('div');
+    compassIcon.className = 'mb-compass-icon';
+    compass.appendChild(compassIcon);
+
     compass.onmouseenter = () => {
-        Object.assign(compass.style, { backgroundColor: '#3b82f6', color: '#ffffff', opacity: '1', transform: 'scale(1.05)' });
+        // 상태 락(found/error) 중에는 호버 색상 덮어쓰지 않음
+        if (compass.classList.contains('mb-compass-found') || compass.classList.contains('mb-compass-error')) return;
+        Object.assign(compass.style, { backgroundColor: '#3b82f6', opacity: '1', transform: 'scale(1.08)' });
+        compass.style.color = '#ffffff';
     };
     compass.onmouseleave = () => {
-        Object.assign(compass.style, { backgroundColor: '#ffffff', color: '#3b82f6', opacity: '0.6', transform: 'scale(1)' });
+        if (compass.classList.contains('mb-compass-found') || compass.classList.contains('mb-compass-error')) return;
+        Object.assign(compass.style, { backgroundColor: '#ffffff', opacity: '0.75', transform: 'scale(1)' });
+        compass.style.color = '#3b82f6';
     };
     document.body.appendChild(compass);
 
+    // 나침반 상태 변경 헬퍼
+    // state: 'default' | 'searching' | 'found' | 'notfound'
+    // direction: 'up' | 'down' (default 상태일 때만 사용)
+    function setCompassState(state, direction = 'up') {
+        compass.classList.remove('mb-compass-spin', 'mb-compass-found', 'mb-compass-error');
+
+        if (state === 'default') {
+            compassIcon.innerHTML = direction === 'up' ? COMPASS_SVG_UP : COMPASS_SVG_DOWN;
+            compass.dataset.tooltip = direction === 'up'
+                ? 'Saved Point is above (Click to find)'
+                : 'Saved Point is below (Click to find)';
+            // 색상 원복 (호버 상태가 아니면)
+            if (compass.style.backgroundColor !== 'rgb(59, 130, 246)') {
+                compass.style.color = '#3b82f6';
+            }
+        } else if (state === 'searching') {
+            compass.classList.add('mb-compass-spin');
+            compass.dataset.tooltip = 'Finding location...';
+            // 검색 중에는 위쪽 화살표 유지(사용자가 위로 스크롤하며 찾는 중)
+            if (!compassIcon.innerHTML.trim()) compassIcon.innerHTML = COMPASS_SVG_UP;
+        } else if (state === 'found') {
+            compass.classList.add('mb-compass-found');
+            compass.dataset.tooltip = 'Found it!';
+        } else if (state === 'notfound') {
+            compass.classList.add('mb-compass-error');
+            compass.dataset.tooltip = 'Location not found';
+        }
+    }
+
     const track = async () => {
+        // 상태 락(2초/3초 표시) 중에는 갱신 차단
+        if (window.mbCompassLocked) return;
+
         const auth = await getAuthInfo();
         if (!auth.apiKey) return;
 
@@ -921,14 +1037,15 @@ async function initSmartNavigator() {
         }
 
         if (!targetBubble) {
-            if (!window.isNavSearching) compass.textContent = "⬆️ Saved Point (Click to find)";
+            // 저장점이 DOM에 없음 → 위로 스크롤하며 찾아야 함
+            if (!window.isNavSearching) setCompassState('default', 'up');
             compass.style.display = 'flex';
 
-            // 🌟 [핵심 픽스] 말풍선(Bubble) 갯수를 카운팅하여 진짜 끝을 판단
+            // 🌟 말풍선 갯수 카운팅으로 진짜 끝 판단
             compass.onclick = () => {
                 if (window.isNavSearching) return;
                 window.isNavSearching = true;
-                compass.textContent = "⏳ Finding location...";
+                setCompassState('searching');
 
                 let sameBubbleCount = 0;
                 let previousBubbleCount = 0;
@@ -949,32 +1066,42 @@ async function initSmartNavigator() {
                         window.isNavSearching = false;
                         found.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-                        // 발견 시각적 피드백 제공
+                        // 발견 시각적 피드백 (말풍선 하이라이트)
                         const originalBg = found.style.backgroundColor;
                         found.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
                         setTimeout(() => found.style.backgroundColor = originalBg, 2000);
 
-                        compass.textContent = "✅ Found it!";
-                        setTimeout(() => track(), 2000);
+                        // 나침반: 초록 테두리 2초 표시
+                        setCompassState('found');
+                        window.mbCompassLocked = true;
+                        setTimeout(() => {
+                            window.mbCompassLocked = false;
+                            track();
+                        }, 2000);
                     } else {
-                        // 페이지 내부의 모든 스크롤 가능한 요소를 강제로 맨 위로 올림 (로딩 트리거)
+                        // 페이지 내 모든 스크롤 가능 영역을 맨 위로 (로딩 트리거)
                         window.scrollTo(0, 0);
                         document.querySelectorAll('*').forEach(el => {
                             if (el.scrollHeight > el.clientHeight && el.scrollTop > 0) el.scrollTo(0, 0);
                         });
 
-                        // 높이 대신 말풍선의 실제 갯수를 검사
                         const currentBubbleCount = currentBubbles.length;
                         if (currentBubbleCount === previousBubbleCount) {
-                            if (++sameBubbleCount >= 4) { // 대기 시간을 약간 늘림 (약 6초)
+                            if (++sameBubbleCount >= 4) {
                                 clearInterval(searchInterval);
                                 window.isNavSearching = false;
-                                compass.textContent = "❌ Location not found (might be a new chat)";
-                                setTimeout(() => track(), 3000);
+
+                                // 나침반: 빨간 테두리 3초 표시
+                                setCompassState('notfound');
+                                window.mbCompassLocked = true;
+                                setTimeout(() => {
+                                    window.mbCompassLocked = false;
+                                    track();
+                                }, 3000);
                                 return;
                             }
                         } else {
-                            sameBubbleCount = 0; // 새 말풍선이 로딩되었으면 카운트 초기화
+                            sameBubbleCount = 0;
                         }
                         previousBubbleCount = currentBubbleCount;
                     }
@@ -986,10 +1113,17 @@ async function initSmartNavigator() {
             const moveToTarget = () => targetBubble.scrollIntoView({ behavior: 'smooth', block: 'end' });
 
             if (rect.bottom < 0) {
-                compass.textContent = "⬆️ Last Saved Point"; compass.style.display = 'flex'; compass.onclick = moveToTarget;
+                // 저장점이 화면 위쪽에 있음
+                setCompassState('default', 'up');
+                compass.style.display = 'flex';
+                compass.onclick = moveToTarget;
             } else if (rect.top > window.innerHeight) {
-                compass.textContent = "⬇️ Last Saved Point"; compass.style.display = 'flex'; compass.onclick = moveToTarget;
+                // 저장점이 화면 아래쪽에 있음
+                setCompassState('default', 'down');
+                compass.style.display = 'flex';
+                compass.onclick = moveToTarget;
             } else {
+                // 화면 안에 있음 → 나침반 숨김
                 compass.style.display = 'none';
             }
         }
