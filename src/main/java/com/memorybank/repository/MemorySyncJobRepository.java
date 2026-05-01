@@ -54,11 +54,13 @@ public class MemorySyncJobRepository {
                 .getResultList();
     }
 
-    // 워크스페이스 ID와 상태로 조회 (기존 작업 취소용)
-    public List<MemorySyncJob> findByWorkspaceIdAndStatus(Long workspaceId, SyncStatus status) {
-        return em.createQuery("SELECT m FROM MemorySyncJob m " +
-                                "WHERE m.workspace.id = :workspaceId AND m.status = :status", MemorySyncJob.class)
-                .setParameter("workspaceId", workspaceId)
+    // 유저(Member) ID와 상태로 조회 (해당 유저의 모든 기존 작업 취소용)
+    public List<MemorySyncJob> findByMemberIdAndStatus(Long memberId, SyncStatus status) {
+        return em.createQuery(
+                        "select m from MemorySyncJob m " +
+                                "join fetch m.workspace w " +
+                                "where w.member.id = :memberId and m.status = :status", MemorySyncJob.class)
+                .setParameter("memberId", memberId)
                 .setParameter("status", status)
                 .getResultList();
     }

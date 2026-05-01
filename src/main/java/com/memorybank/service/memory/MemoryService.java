@@ -142,11 +142,12 @@ public class MemoryService {
         Workspace workspace = workspaceService.findByIdWithMember(request.workspaceId());
         if(!workspace.getMember().getId().equals(memberId)) throw new IllegalStateException("Unauthorized access");
 
-        //새 스캔 시작 전, 해당 워크스페이스의 기존 PENDING 작업들을 강제 취소(무효화)
-        List<MemorySyncJob> oldJobs = memorySyncJobRepository.findByWorkspaceIdAndStatus(workspace.getId(), SyncStatus.PENDING);
+        // 유저의 모든 대기 작업을 강제 취소
+        List<MemorySyncJob> oldJobs = memorySyncJobRepository.findByMemberIdAndStatus(memberId, SyncStatus.PENDING);
         for(MemorySyncJob old : oldJobs) {
             old.markAsFailed();
             memorySyncJobRepository.save(old);
+            log.info("🚨 낡은 스캔 작업 강제 취소 (Job ID: {})", old.getId());
         }
 
         String content = request.rawContent() != null ? request.rawContent() : "";

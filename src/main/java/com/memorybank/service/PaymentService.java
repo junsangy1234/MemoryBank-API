@@ -35,10 +35,10 @@ public class PaymentService {
     private final ObjectMapper objectMapper;
 
     // 🌟 레몬스퀴지 대시보드에서 생성한 Product ID (실제 ID로 변경 필요)
-    private static final String PRODUCT_ID_STARTER = "1000071";
-    private static final String PRODUCT_ID_LITE = "1000031";
-    private static final String PRODUCT_ID_PRO = "1000036";
-    private static final String PRODUCT_ID_PREMIUM = "1000042";
+    private static final String PRODUCT_ID_STARTER = "1018424";
+    private static final String PRODUCT_ID_LITE = "1018429";
+    private static final String PRODUCT_ID_PRO = "1018439";
+    private static final String PRODUCT_ID_PREMIUM = "1018443";
 
     @Transactional
     public void processWebhook(String signature, String rawBody) {
@@ -85,8 +85,6 @@ public class PaymentService {
                 log.info("⚠️ 회원 ID {} 구독 취소 예약 (결제일 만료 전까지 기존 혜택 유지)", member.getId());
 
             } else if ("subscription_expired".equals(eventName)) {
-                // [수정 핵심 2] 결제 기간이 완전히 끝나서 진짜 만료된 상태 -> 이때 강등!
-                member.upgradeRole(Role.FREE);
                 // FREE로 변경.
                 member.resetRole();
                 log.info("💔 회원 ID {} 구독 완전히 만료됨 (FREE 강등 완료)", member.getId());
