@@ -93,6 +93,11 @@ public class Member {
         this.dailyCredits = 20;
     }
 
+    public void lockStarterPack(){
+        this.hasStarterPack = false;
+        this.dailyCredits = Math.max(0, this.dailyCredits - 100);
+    }
+
     public void upgradeRole(Role newRole) {
         this.role = newRole;
         // 등급 업그레이드 즉시 해당 등급의 최대 크레딧으로 충전

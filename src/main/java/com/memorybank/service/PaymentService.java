@@ -88,6 +88,17 @@ public class PaymentService {
                 // FREE로 변경.
                 member.resetRole();
                 log.info("💔 회원 ID {} 구독 완전히 만료됨 (FREE 강등 완료)", member.getId());
+            } else if ("order_refunded".equals(eventName) || "subscription_payment_refunded".equals(eventName)) {
+
+                if (PRODUCT_ID_STARTER.equals(productId)) {
+                    // 스타터팩 환불: 영구 소장 권한 회수 (Member 엔티티에 lockStarterPack 메서드가 없다면 만들어주세요!)
+                    member.lockStarterPack();
+                    log.info("💸 회원 ID {} 스타터팩 환불 완료 (권한 회수)", member.getId());
+                } else {
+                    // 구독 환불: 즉시 FREE로 강등
+                    member.resetRole();
+                    log.info("💸 회원 ID {} 구독 환불 완료 (FREE 강등)", member.getId());
+                }
             } else {
                 log.info("무시되는 웹훅 이벤트입니다: {}", eventName);
             }
