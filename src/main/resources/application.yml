@@ -4,8 +4,8 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/postgres
-    username: postgres
+    url: jdbc:postgresql://localhost:5432/memorybank
+    username: ${DB_ID}
     password: ${DB_PW}
     driver-class-name: org.postgresql.Driver
   servlet:
