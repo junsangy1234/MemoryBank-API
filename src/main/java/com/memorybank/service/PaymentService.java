@@ -8,10 +8,7 @@ import com.memorybank.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -19,6 +16,8 @@ import org.springframework.web.client.RestTemplate;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -30,6 +29,10 @@ public class PaymentService {
 
     @Value("${lemon-squeezy.api-key}")
     private String lemonSqueezyApiKey;
+
+    @Value("${DISCORD_WEBHOOK_BUSINESS}")
+    private String discordBusinessWebhookUrl;
+    private final RestTemplate restTemplate = new RestTemplate();
 
     private final MemberRepository memberRepository;
     private final ObjectMapper objectMapper;
@@ -64,6 +67,8 @@ public class PaymentService {
             if ("order_created".equals(eventName) && PRODUCT_ID_STARTER.equals(productId)) {
                 member.unlockStarterPack(); // 평생 해금 + 100 크레딧 즉시 지급
                 log.info("회원 ID {} 스타터팩 결제 완료! (전체스캔 해금)", member.getId());
+                String alertMsg = String.format("💰 **[결제 성공!]** 💰\n회원 ID `%s` 님이 스타터팩을 결제하셨습니다! 🚀", member.getId(), productId);
+                sendBusinessAlert(alertMsg);
                 return;
             }
             // 3. 이벤트 종류에 따른 분기 처리 (구독 결제/수정 vs 구독 취소/만료)
@@ -78,6 +83,8 @@ public class PaymentService {
                     member.upgradeRole(Role.PREMIUM);
                 }
                 log.info("회원 ID {} 결제 및 업그레이드 완료! 상품ID: {}", member.getId(), productId);
+                String alertMsg = String.format("💰 **[결제 성공!]** 💰\n회원 ID `%s` 님이 `%s` 플랜을 결제하셨습니다! 🚀", member.getId(), productId);
+                sendBusinessAlert(alertMsg);
 
             } else if ("subscription_cancelled".equals(eventName)) {
                 // [수정 핵심 1] 구독 취소 버튼을 누른 상태 (결제 만료일까지 혜택 유지)
@@ -99,6 +106,8 @@ public class PaymentService {
                     member.resetRole();
                     log.info("💸 회원 ID {} 구독 환불 완료 (FREE 강등)", member.getId());
                 }
+                String alertMsg = String.format("💔 **[환불 발생]**\n회원 ID `%s` 님이 환불을 요청하여 권한이 회수되었습니다.", member.getId());
+                sendBusinessAlert(alertMsg);
             } else {
                 log.info("무시되는 웹훅 이벤트입니다: {}", eventName);
             }
@@ -203,6 +212,22 @@ public class PaymentService {
         } catch (Exception e){
             log.error("Lemon Squeezy Customer ID 조회 실패 (Email: {})", email, e);
             return null;
+        }
+    }
+
+    //디스코드 알림
+    private void sendBusinessAlert(String message) {
+        if (discordBusinessWebhookUrl == null || discordBusinessWebhookUrl.isEmpty()) return;
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("content", message);
+
+            restTemplate.postForEntity(discordBusinessWebhookUrl, new HttpEntity<>(body, headers), String.class);
+        } catch (Exception e) {
+            log.error("비즈니스 디스코드 알림 전송 실패", e);
         }
     }
 

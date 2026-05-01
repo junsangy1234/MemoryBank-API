@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.resource.NoResourceFoundException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -20,7 +21,7 @@ import java.util.Map;
 @RestControllerAdvice
 public class ExControllerAdvice {
 
-    @Value("${DISCORD_WEBHOOK_URL}")
+    @Value("${DISCORD_WEBHOOK_SYSTEM}")
     private String discordWebhookUrl;
 
     //디스코드로 HTTP 요청을 보내기 위한 객체 추가
@@ -46,14 +47,27 @@ public class ExControllerAdvice {
     }
 
     // ==========================================
-    // 2. 치명적인 서버 에러 처리 (디스코드 알림 발송!)
+    // 디스코드 알람
+    // ==========================================
+
+    //무시
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResult> noResourceFoundHandler(NoResourceFoundException e) {
+        log.warn("잘못된 경로 요청: {}", e.getMessage()); // 서버 터미널에 가볍게 노란불만 켭니다.
+
+        ErrorResult errorResult = new ErrorResult("NOT_FOUND", "요청하신 경로를 찾을 수 없습니다.");
+        return new ResponseEntity<>(errorResult, HttpStatus.NOT_FOUND);
+    }
+
+    // ==========================================
+    // 치명적인 서버 에러 처리
     // ==========================================
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResult> handleAllUncaughtException(Exception e) {
         // 1. 서버 도커 로그에는 아주 상세하게 빨간불 켜기
         log.error("🚨 [치명적 서버 에러 발생] ", e);
 
-        // 2. 대표님 디스코드로 알림 쏘기!
+        // 2. 디스코드로 알림 쏘기!
         sendDiscordAlert(e.getMessage(), e.toString());
 
         // 3. 유저에게는 안전한 에러 메시지만 반환
