@@ -151,7 +151,7 @@ public class MemoryService {
         }
 
         String content = request.rawContent() != null ? request.rawContent() : "";
-        int calculatedCredits = Math.max(1, (int) Math.ceil(content.length() / 5000.0));
+        int calculatedCredits = Math.max(1, (int) Math.ceil(content.length() / 3000.0));
 
         MemorySyncJob pendingJob = MemorySyncJob.createPendingJob(workspace, request.rawContent(), request.estimatedCredits());
         memorySyncJobRepository.save(pendingJob);
