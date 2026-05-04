@@ -4,6 +4,7 @@ import com.memorybank.domain.Member;
 import com.memorybank.dto.member.MemberDto;
 import com.memorybank.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +45,7 @@ public class MemberService {
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다. ID=" + memberId));
     }
 
+    @Cacheable(value = "member-by-apikey", key = "#apiKey")
     public Member findByApiKey(String apiKey) {
         return memberRepository.findByApiKey(apiKey)
                 .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 API Key입니다."));
@@ -56,6 +58,7 @@ public class MemberService {
 
     //resetCredits으로 크레딧 변경 상황때문에 Transactional
     @Transactional
+    @Cacheable(value = "member-info", key = "#apiKey")
     public MemberDto getMyInfo(String apiKey){
         Member member = memberRepository.findByApiKey(apiKey)
                 .orElseThrow(() -> new IllegalArgumentException("유효하지 않는 API키 입니다."));

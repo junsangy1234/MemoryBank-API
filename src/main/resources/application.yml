@@ -8,6 +8,14 @@ spring:
     username: ${DB_ID}
     password: ${DB_PW}
     driver-class-name: org.postgresql.Driver
+  # -- Redis 설정--
+  data:
+    redis:
+      host: redis
+      port: 6379
+  cache:
+    type: redis
+  #---------------
   servlet:
     multipart:
       max-file-size: 20MB

@@ -5,6 +5,9 @@ import com.memorybank.domain.Role;
 import com.memorybank.domain.Workspace;
 import com.memorybank.repository.WorkspaceRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +21,7 @@ public class WorkspaceService {
     private final WorkspaceRepository workspaceRepository;
 
     @Transactional
+    @CacheEvict(value = "workspaces", key = "#member.id")
     public Long createWorkspace(Member member, String name) {
         validateDuplicateWorkspace(name, member);
 
@@ -40,6 +44,10 @@ public class WorkspaceService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "workspace-by-id", key = "#workspaceId"),
+            @CacheEvict(value = "workspaces", key = "#member.id")
+    })
     public void renameWorkspace(Member member, Long workspaceId, String newName){
         Workspace workspace = workspaceRepository.findByIdWithMember(workspaceId).get();
 
@@ -51,6 +59,10 @@ public class WorkspaceService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "workspace-by-id", key = "#workspaceId"),
+            @CacheEvict(value = "workspaces", key = "#member.id")
+    })
     public void deleteWorkspace(Member member, Long workspaceId){
         Workspace workspace = workspaceRepository.findByIdWithMember(workspaceId).get();
 
@@ -79,6 +91,7 @@ public class WorkspaceService {
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 워크스페이스입니다. ID=" + workspaceId));
     }
 
+    @Cacheable(value = "workspace-by-id", key = "#workspaceId")
     public Workspace findByIdWithMember(Long workspaceId){
         return workspaceRepository.findByIdWithMember(workspaceId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 워크스페이스입니다. ID=" + workspaceId));
@@ -88,6 +101,7 @@ public class WorkspaceService {
         return workspaceRepository.findAll();
     }
 
+    @Cacheable(value = "workspaces", key = "#member.id")
     public List<Workspace> findByMember(Member member){
         return workspaceRepository.findByMember(member);
     }
