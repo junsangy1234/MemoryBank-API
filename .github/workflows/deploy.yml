@@ -46,7 +46,7 @@ jobs:
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_KEY }} # 패스워드 대신 열쇠(PEM) 사용
+          key: ${{ secrets.SERVER_KEY }} # 패스워드 대신 열쇠(PEM) 사용.
           script: |
             cd /home/ubuntu/memory-bank           # 서버 내 프로젝트 폴더로 이동
             docker-compose pull app            # 도커 허브에서 최신 이미지 다운로드
