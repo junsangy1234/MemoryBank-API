@@ -14,7 +14,7 @@ public class MemorybankApplication {
 	private JdbcTemplate jdbcTemplate;
 
 	public static void main(String[] args) {
-		System.out.println("🚀 [CI/CD 파이프라인 가동 성공!] 깃허브 로봇이 배포했습니다!");
+		System.out.println("🚀 [CI/CD 파이프라인 가동 성공!] 깃허브 로봇이 배포했습니다!!");
 		SpringApplication.run(MemorybankApplication.class, args);
 	}
 
