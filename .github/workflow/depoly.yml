@@ -1,0 +1,53 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ] # main 브랜치에 푸시하면 자동 실행
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. 코드 체크아웃
+        uses: actions/checkout@v3
+
+      - name: 2. JDK 17 세팅
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: 3. Gradle 빌드 (.jar 생성)
+        run: |
+          chmod +x ./gradlew
+          ./gradlew clean build -x test
+
+      - name: 4. 도커 허브 로그인
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: 5. 도커 이미지 빌드 및 푸시
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ked0505/memory-bank-app:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 6. 우분투 서버 SSH 접속 및 배포
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_KEY }} # 패스워드 대신 열쇠(PEM) 사용
+          script: |
+            cd Programming/project/memory-bank # 서버 내 프로젝트 폴더로 이동
+            docker-compose pull app            # 도커 허브에서 최신 이미지 다운로드
+            docker-compose up -d               # 컨테이너 재시작
