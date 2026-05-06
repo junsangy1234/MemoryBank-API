@@ -9,6 +9,9 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -37,7 +40,7 @@ public class CacheConfig {
                 // value는 JSON으로 저장 (역직렬화 시 타입 정보 포함)
                 .serializeValuesWith(
                         RedisSerializationContext.SerializationPair
-                                .fromSerializer(new GenericJackson2JsonRedisSerializer()));
+                                .fromSerializer(new GenericJackson2JsonRedisSerializer(objectMapper())));
     }
 
     /**
@@ -64,5 +67,23 @@ public class CacheConfig {
                 .cacheDefaults(defaultCacheConfig())    // 위 목록에 없는 캐시는 기본값 적용
                 .withInitialCacheConfigurations(cacheConfigurations)
                 .build();
+    }
+
+    private ObjectMapper objectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        // Java 8 날짜 타입 (LocalDate, LocalDateTime 등) 지원 추가
+        mapper.registerModule(new JavaTimeModule());
+
+        // 날짜를 타임스탬프 숫자가 아닌 문자열로 저장 ("2024-01-15" 형태)
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+        // 역직렬화 시 타입 정보 포함 (없으면 꺼낼 때 타입 못 찾음)
+        mapper.activateDefaultTyping(
+                mapper.getPolymorphicTypeValidator(),
+                ObjectMapper.DefaultTyping.NON_FINAL
+        );
+
+        return mapper;
     }
 }
