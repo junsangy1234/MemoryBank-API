@@ -16,8 +16,6 @@ public class MemorySyncJob {
     @Column(name = "sync_memory_id")
     private Long id;
 
-    // Redis 직렬화 시 순환참조 방지용
-    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "workspace_id")
     private Workspace workspace;

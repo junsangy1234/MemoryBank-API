@@ -21,14 +21,10 @@ public class Workspace {
     @Column(nullable = false)
     private String name;
 
-    // Redis 직렬화 시 순환참조 방지용 (Workspace → Member → Workspace 무한루프)
-    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "member_id")
     private Member member;
 
-    // Redis 직렬화 시 Lazy Loading 오류 방지용
-    @JsonIgnore
     @OneToMany(mappedBy = "workspace", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Memory> memories = new ArrayList<>();
 

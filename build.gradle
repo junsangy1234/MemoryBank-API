@@ -34,9 +34,6 @@ dependencies {
 
 	implementation 'com.pgvector:pgvector:0.1.4'
 
-	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-	implementation 'org.springframework.boot:spring-boot-starter-cache'
-
 	implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
 	implementation 'org.hibernate.orm:hibernate-vector:6.6.8.Final'

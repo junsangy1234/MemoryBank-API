@@ -8,7 +8,6 @@ import com.memorybank.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,7 +44,6 @@ public class PaymentService {
     private static final String PRODUCT_ID_PREMIUM = "1018443";
 
     @Transactional
-    @CacheEvict(value = {"member-by-apikey", "member-info"}, allEntries = true)
     public void processWebhook(String signature, String rawBody) {
         // 1. 보안 검증: 레몬 스퀴지가 보낸 게 맞는지 확인 (해킹 방지)
         verifySignature(signature, rawBody);

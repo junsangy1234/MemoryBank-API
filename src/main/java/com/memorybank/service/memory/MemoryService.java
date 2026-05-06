@@ -18,7 +18,6 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -356,7 +355,6 @@ public class MemoryService {
     }
 
     @Transactional
-    @CacheEvict(value = {"member-by-apiKey", "member-info"}, allEntries = true)
     public void deductCredit(Long memberId, int cost) {
         Member member = memberRepository.findById(memberId).orElseThrow();
         member.useCredit(cost);

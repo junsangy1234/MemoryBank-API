@@ -23,8 +23,6 @@ public class Memory {
     @Column(name = "memory_id")
     private Long id;
 
-    // Redis 직렬화 시 순환참조 방지용 (Memory → Workspace → Memory 무한루프)
-    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "workspace_id")
     private Workspace workspace;
