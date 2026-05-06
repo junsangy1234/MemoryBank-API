@@ -1,5 +1,6 @@
 package com.memorybank.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -15,6 +16,8 @@ public class MemorySyncJob {
     @Column(name = "sync_memory_id")
     private Long id;
 
+    // Redis 직렬화 시 순환참조 방지용
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "workspace_id")
     private Workspace workspace;

@@ -1,5 +1,6 @@
 package com.memorybank.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -19,6 +20,8 @@ public class Member {
     @Column(name = "member_id")
     private Long id;
 
+    // Redis 직렬화 시 Lazy Loading 오류 방지용
+    @JsonIgnore
     @OneToMany(mappedBy = "member")
     private List<Workspace> workspaces = new ArrayList<>();
 
