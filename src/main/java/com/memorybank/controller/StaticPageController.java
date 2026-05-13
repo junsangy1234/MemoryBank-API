@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 public class StaticPageController {
 
     // 1. 홈페이지 (소개 페이지)
-    @GetMapping("/home")
+    @GetMapping({"/","/home"})
     public String homePage() {
         return "home"; // home.html 연결
     }
